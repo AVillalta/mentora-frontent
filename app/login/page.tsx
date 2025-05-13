@@ -55,8 +55,8 @@ export default function Login() {
         case 'student':
           router.push('/student');
           break;
-        case 'teacher':
-          router.push('/teacher');
+        case 'professor':
+          router.push('/professor');
           break;
         default:
           throw new Error('Rol no reconocido o no asignado');

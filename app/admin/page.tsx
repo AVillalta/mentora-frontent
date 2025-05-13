@@ -1,63 +1,298 @@
-"use client"
+'use client';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
-} from "recharts"
-import MainLayout from "@/components/layout/main-layout"
-import { Book, FileText, TrendingUp, Users, Plus } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import api from '@/lib/api';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import MainLayout from '@/components/layout/main-layout';
+import { Book, FileText, TrendingUp, Users, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { AxiosError } from 'axios';
 
-// Datos de ejemplo
-const userStats = [
-  { name: "Ene", value: 120 },
-  { name: "Feb", value: 145 },
-  { name: "Mar", value: 168 },
-  { name: "Abr", value: 190 },
-  { name: "May", value: 210 },
-  { name: "Jun", value: 235 },
-]
+const COLORS = ['#1976d2', '#dc004e', '#ff9800'];
 
-const userDistribution = [
-  { name: "Estudiantes", value: 235 },
-  { name: "Profesores", value: 42 },
-  { name: "Administradores", value: 8 },
-]
+// Interfaces basadas en los recursos
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  created_at?: string;
+}
 
-const COLORS = ["#1976d2", "#dc004e", "#ff9800"]
+interface Course {
+  id: number;
+  schedule: string;
+  weighting: string;
+  signature: string;
+  semester: string;
+  students?: number;
+  professor?: string;
+}
 
-const courseStats = [
-  { name: "2024-1", value: 28 },
-  { name: "2024-2", value: 32 },
-  { name: "2025-1", value: 38 },
-]
+interface Enrollment {
+  id: number;
+  course_id: number;
+  student_id: number;
+  final_grade?: string;
+}
 
-const recentUsers = [
-  { id: 1, name: "Carlos Martínez", email: "carlos@estudiante.edu", role: "student", date: "2025-03-15" },
-  { id: 2, name: "Laura Sánchez", email: "laura@estudiante.edu", role: "student", date: "2025-03-12" },
-  { id: 3, name: "Dr. Rodríguez", email: "rodriguez@profesor.edu", role: "teacher", date: "2025-03-10" },
-  { id: 4, name: "Ana López", email: "ana@estudiante.edu", role: "student", date: "2025-03-08" },
-  { id: 5, name: "Javier García", email: "javier@profesor.edu", role: "teacher", date: "2025-03-05" },
-]
+interface Grade {
+  id: number;
+  grade_value: string;
+  enrollment_id: number;
+}
 
-export default function AdminDashboard() {
+interface Stats {
+  totalUsers: number;
+  newUsersThisMonth: number;
+  totalCourses: number;
+  totalEnrollments: number;
+  averageGrade: number;
+}
+
+interface UserStats {
+  name: string;
+  value: number;
+}
+
+interface UserDistribution {
+  name: string;
+  value: number;
+}
+
+interface CourseStats {
+  name: string;
+  value: number;
+}
+
+export default function AdminDashboard(): JSX.Element {
+  const router = useRouter();
+  const [token, setToken] = useState<string | null>(
+    typeof window !== 'undefined' ? localStorage.getItem('token') : null
+  );
+  const [stats, setStats] = useState<Stats>({
+    totalUsers: 0,
+    newUsersThisMonth: 0,
+    totalCourses: 0,
+    totalEnrollments: 0,
+    averageGrade: 0,
+  });
+  const [userStats, setUserStats] = useState<UserStats[]>([]);
+  const [userDistribution, setUserDistribution] = useState<UserDistribution[]>([]);
+  const [courseStats, setCourseStats] = useState<CourseStats[]>([]);
+  const [recentUsers, setRecentUsers] = useState<User[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string>(''); 
+  const [userEmail, setUserEmail] = useState<string>('');
+
+  // Verificar autenticación y obtener datos del usuario
+  useEffect(() => {
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+    const checkRole = async () => {
+      try {
+        const response = await api.get('/user');
+        const userData = response.data.data || response.data;
+        const userRole = userData.role;
+        const userName = userData.name || 'Usuario Desconocido';
+        const userEmail = userData.email || 'sin@correo.com';
+        console.log('Respuesta de /user:', response.data);
+        console.log('Nombre de usuario:', userName);
+        console.log('Email de usuario:', userEmail);
+        if (!userRole) {
+          setError('No se pudo determinar el rol del usuario.');
+          return;
+        }
+        if (userRole !== 'admin') {
+          router.push('/student');
+          return;
+        }
+        setUserName(userName);
+        setUserEmail(userEmail);
+      } catch (err: unknown) {
+        if (err instanceof AxiosError) {
+          if (err.response?.status === 401) {
+            setError('Sesión expirada. Por favor, inicia sesión nuevamente.');
+            router.push('/login');
+          } else {
+            setError('Error al verificar el rol. Inténtalo de nuevo.');
+          }
+        } else {
+          setError('Error inesperado. Inténtalo de nuevo.');
+        }
+        console.error('Error al verificar el rol:', err);
+      }
+    };
+    checkRole();
+  }, [token, router]);
+
+  // Cargar datos de la API
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        setLoading(true);
+
+        // Realizamos todas las peticiones en paralelo
+        const [usersRes, coursesRes, enrollmentsRes, gradesRes] = await Promise.all([
+          api.get('/users'),
+          api.get('/courses'),
+          api.get('/enrollments'),
+          api.get('/grades'),
+        ]);
+
+        const users: User[] = Array.isArray(usersRes.data.data) ? usersRes.data.data : [];
+        console.log('Respuesta cruda de /users:', usersRes.data);
+        console.log('Usuarios obtenidos de /users:', users);
+        console.log('Campos created_at:', users.map(u => ({ email: u.email, created_at: u.created_at })));
+
+        const coursesData: Course[] = Array.isArray(coursesRes.data.data) ? coursesRes.data.data : [];
+        const enrollments: Enrollment[] = Array.isArray(enrollmentsRes.data.data) ? enrollmentsRes.data.data : [];
+        const grades: Grade[] = Array.isArray(gradesRes.data.data) ? gradesRes.data.data : [];
+
+        // Procesar estadísticas
+        const totalUsers = users.length;
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        const newUsersThisMonth = users.filter((user) => {
+          if (!user.created_at) return false;
+          const createdAt = new Date(user.created_at);
+          return createdAt.getMonth() === currentMonth && createdAt.getFullYear() === currentYear;
+        }).length;
+        const totalCourses = coursesData.length;
+        const totalEnrollments = enrollments.length;
+        const averageGrade =
+          grades.length > 0
+            ? grades.reduce((sum: number, grade: Grade) => sum + parseFloat(grade.grade_value || '0'), 0) /
+              grades.length
+            : 0;
+
+        setStats({
+          totalUsers,
+          newUsersThisMonth,
+          totalCourses,
+          totalEnrollments,
+          averageGrade: parseFloat(averageGrade.toFixed(1)),
+        });
+
+        // Procesar crecimiento de usuarios (por mes)
+        const userStatsData = Array.from({ length: 6 }, (_, i) => {
+          const date = new Date();
+          date.setMonth(date.getMonth() - i);
+          const name = date.toLocaleString('es', { month: 'short' });
+          const value = users.filter((user) => {
+            if (!user.created_at) return false;
+            const createdAt = new Date(user.created_at);
+            return createdAt.getMonth() === date.getMonth() && createdAt.getFullYear() === date.getFullYear();
+          }).length;
+          return { name, value };
+        }).reverse();
+
+        setUserStats(userStatsData);
+
+        // Procesar distribución de usuarios (por rol)
+        const userDistributionData = [
+          { name: 'Estudiantes', value: users.filter((u) => u.role.toLowerCase() === 'student').length },
+          { name: 'Profesores', value: users.filter((u) => u.role.toLowerCase() === 'professor').length },
+          { name: 'Administradores', value: users.filter((u) => u.role.toLowerCase() === 'admin').length },
+        ].filter((d) => d.value > 0);
+
+        setUserDistribution(userDistributionData);
+
+        // Procesar cursos por semestre
+        const courseStatsData = coursesData.reduce((acc: CourseStats[], course: Course) => {
+          const semester = course.semester || 'Sin semestre';
+          const existing = acc.find((s) => s.name === semester);
+          if (existing) {
+            existing.value += 1;
+          } else {
+            acc.push({ name: semester, value: 1 });
+          }
+          return acc;
+        }, []);
+
+        setCourseStats(courseStatsData);
+
+        // Usuarios recientes (últimos 5)
+        const recentUsersData = users
+          .filter((user) => {
+            const hasCreatedAt = !!user.created_at;
+            if (!hasCreatedAt) {
+              console.log('Usuario sin created_at:', user);
+            }
+            return hasCreatedAt;
+          })
+          .sort((a, b) => {
+            try {
+              return new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime();
+            } catch (e) {
+              console.error('Error al ordenar created_at:', { userA: a, userB: b, error: e });
+              return 0;
+            }
+          })
+          .slice(0, 5);
+
+        setRecentUsers(recentUsersData);
+
+        // Cursos con conteo de estudiantes
+        const coursesWithStudents = coursesData.map((course) => ({
+          ...course,
+          students: enrollments.filter((e) => e.course_id === course.id).length,
+          professor: course.professor ?? 'Sin asignar',
+        }));
+
+        setCourses(coursesWithStudents);
+      } catch (err: unknown) {
+        if (err instanceof AxiosError) {
+          if (err.code === 'ERR_NETWORK') {
+            setError('No se pudo conectar con el servidor. Verifica que la API esté corriendo en http://localhost:80.');
+          } else if (err.response?.status === 401) {
+            setError('Sesión expirada. Por favor, inicia sesión nuevamente.');
+            router.push('/login');
+          } else {
+            setError('Error al cargar los datos. Inténtalo de nuevo.');
+          }
+        } else {
+          setError('Error inesperado. Inténtalo de nuevo.');
+        }
+        console.error('Dashboard error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (token) {
+      fetchDashboard();
+    }
+  }, [router, token]);
+
+  if (loading) {
+    return (
+      <MainLayout userRole="admin" userName={userName || 'Cargando...'} userEmail={userEmail || 'cargando@mentora.edu'}>
+        <div className="p-6 text-primary">Cargando dashboard...</div>
+      </MainLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <MainLayout userRole="admin" userName={userName || 'Error'} userEmail={userEmail || 'error@mentora.edu'}>
+        <div className="p-6 text-destructive">{error}</div>
+      </MainLayout>
+    );
+  }
+
   return (
-    <MainLayout userRole="admin" userName="Admin Sistema" userEmail="admin@mentora.edu">
-      <div className="flex flex-col gap-6">
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard Administrador</h1>
+    <MainLayout userRole="admin" userName={userName || 'Usuario Desconocido'} userEmail={userEmail || 'sin@correo.com'}>
+      <div className="flex flex-col gap-6 p-6 w-full max-w-full">
+        <h1 className="text-3xl font-bold tracking-tight text-primary">Dashboard Administrador</h1>
         <p className="text-muted-foreground">Bienvenido de nuevo. Aquí tienes un resumen de la plataforma Mentora.</p>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -67,8 +302,8 @@ export default function AdminDashboard() {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">285</div>
-              <p className="text-xs text-muted-foreground">+25 este mes</p>
+              <div className="text-2xl font-bold">{stats.totalUsers}</div>
+              <p className="text-xs text-muted-foreground">+{stats.newUsersThisMonth} este mes</p>
             </CardContent>
           </Card>
           <Card>
@@ -77,7 +312,7 @@ export default function AdminDashboard() {
               <Book className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">38</div>
+              <div className="text-2xl font-bold">{stats.totalCourses}</div>
               <p className="text-xs text-muted-foreground">Semestre actual</p>
             </CardContent>
           </Card>
@@ -87,7 +322,7 @@ export default function AdminDashboard() {
               <FileText className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">412</div>
+              <div className="text-2xl font-bold">{stats.totalEnrollments}</div>
               <p className="text-xs text-muted-foreground">Este semestre</p>
             </CardContent>
           </Card>
@@ -97,7 +332,7 @@ export default function AdminDashboard() {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">7.8</div>
+              <div className="text-2xl font-bold">{stats.averageGrade}</div>
               <p className="text-xs text-muted-foreground">Todos los cursos</p>
             </CardContent>
           </Card>
@@ -188,9 +423,9 @@ export default function AdminDashboard() {
                           <Avatar>
                             <AvatarFallback>
                               {user.name
-                                .split(" ")
+                                .split(' ')
                                 .map((n) => n[0])
-                                .join("")}
+                                .join('')}
                             </AvatarFallback>
                           </Avatar>
                           <div>
@@ -201,14 +436,14 @@ export default function AdminDashboard() {
                         <div className="flex items-center gap-4">
                           <span
                             className={`inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                              user.role === "student"
-                                ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
-                                : user.role === "teacher"
-                                  ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
-                                  : "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
+                              user.role === 'student'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
+                                : user.role === 'professor'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+                                : 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
                             }`}
                           >
-                            {user.role === "student" ? "Estudiante" : user.role === "teacher" ? "Profesor" : "Admin"}
+                            {user.role === 'student' ? 'Estudiante' : user.role === 'professor' ? 'Profesor' : 'Admin'}
                           </span>
                           <Button variant="outline" size="sm">
                             Ver perfil
@@ -229,7 +464,7 @@ export default function AdminDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="flex justify-end mb-4">
-                  <Button className="gap-2">
+                  <Button className="gap-2 bg-primary hover:bg-blue-700">
                     <Plus className="h-4 w-4" />
                     Añadir Usuario
                   </Button>
@@ -237,7 +472,7 @@ export default function AdminDashboard() {
                 <div className="rounded-md border">
                   <table className="w-full caption-bottom text-sm">
                     <thead className="[&_tr]:border-b">
-                      <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
+                      <tr className="border-b transition-colors hover:bg-muted/50">
                         <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Nombre</th>
                         <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Email</th>
                         <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Rol</th>
@@ -251,26 +486,25 @@ export default function AdminDashboard() {
                     </thead>
                     <tbody className="[&_tr:last-child]:border-0">
                       {recentUsers.map((user) => (
-                        <tr
-                          key={user.id}
-                          className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
-                        >
+                        <tr key={user.id} className="border-b transition-colors hover:bg-muted/50">
                           <td className="p-4 align-middle font-medium">{user.name}</td>
                           <td className="p-4 align-middle">{user.email}</td>
                           <td className="p-4 align-middle">
                             <span
                               className={`inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                                user.role === "student"
-                                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
-                                  : user.role === "teacher"
-                                    ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
-                                    : "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
+                                user.role === 'student'
+                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
+                                : user.role === 'professor'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+                                : 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
                               }`}
                             >
-                              {user.role === "student" ? "Estudiante" : user.role === "teacher" ? "Profesor" : "Admin"}
+                              {user.role === 'student' ? 'Estudiante' : user.role === 'professor' ? 'Profesor' : 'Admin'}
                             </span>
                           </td>
-                          <td className="p-4 align-middle">{new Date(user.date).toLocaleDateString()}</td>
+                          <td className="p-4 align-middle">
+                            {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
+                          </td>
                           <td className="p-4 align-middle text-right">
                             <div className="flex justify-end gap-2">
                               <Button variant="outline" size="sm">
@@ -297,7 +531,7 @@ export default function AdminDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="flex justify-end mb-4">
-                  <Button className="gap-2">
+                  <Button className="gap-2 bg-primary hover:bg-blue-700">
                     <Plus className="h-4 w-4" />
                     Añadir Curso
                   </Button>
@@ -305,7 +539,7 @@ export default function AdminDashboard() {
                 <div className="rounded-md border">
                   <table className="w-full caption-bottom text-sm">
                     <thead className="[&_tr]:border-b">
-                      <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
+                      <tr className="border-b transition-colors hover:bg-muted/50">
                         <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Título</th>
                         <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Profesor</th>
                         <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Semestre</th>
@@ -319,48 +553,12 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="[&_tr:last-child]:border-0">
-                      {[
-                        {
-                          id: 1,
-                          title: "Programación Web",
-                          professor: "Dr. Martínez",
-                          semester: "2025-1",
-                          students: 35,
-                          status: "active",
-                        },
-                        {
-                          id: 2,
-                          title: "Bases de Datos",
-                          professor: "Dra. Rodríguez",
-                          semester: "2025-1",
-                          students: 28,
-                          status: "active",
-                        },
-                        {
-                          id: 3,
-                          title: "Desarrollo Móvil",
-                          professor: "Prof. Sánchez",
-                          semester: "2025-1",
-                          students: 22,
-                          status: "active",
-                        },
-                        {
-                          id: 4,
-                          title: "Inteligencia Artificial",
-                          professor: "Dr. López",
-                          semester: "2025-1",
-                          students: 18,
-                          status: "active",
-                        },
-                      ].map((course) => (
-                        <tr
-                          key={course.id}
-                          className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
-                        >
-                          <td className="p-4 align-middle font-medium">{course.title}</td>
-                          <td className="p-4 align-middle">{course.professor}</td>
-                          <td className="p-4 align-middle">{course.semester}</td>
-                          <td className="p-4 align-middle">{course.students}</td>
+                      {courses.map((course) => (
+                        <tr key={course.id} className="border-b transition-colors hover:bg-muted/50">
+                          <td className="p-4 align-middle font-medium">{course.signature}</td>
+                          <td className="p-4 align-middle">{course.professor || 'Sin asignar'}</td>
+                          <td className="p-4 align-middle">{course.semester || 'Sin semestre'}</td>
+                          <td className="p-4 align-middle">{course.students || 0}</td>
                           <td className="p-4 align-middle">
                             <span className="inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
                               Activo
@@ -387,5 +585,5 @@ export default function AdminDashboard() {
         </Tabs>
       </div>
     </MainLayout>
-  )
+  );
 }
