@@ -69,7 +69,7 @@ interface CourseStats {
   value: number;
 }
 
-export default function AdminDashboard(): JSX.Element {
+export default function AdminDashboard() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(
     typeof window !== 'undefined' ? localStorage.getItem('token') : null
