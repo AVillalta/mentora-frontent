@@ -46,7 +46,7 @@ import { useEffect } from 'react';
 
 interface MainLayoutProps {
   children: React.ReactNode;
-  userRole: 'student' | 'teacher' | 'admin';
+  userRole: 'student' | 'professor' | 'admin';
   userName: string;
   userEmail: string;
 }
@@ -81,10 +81,10 @@ export default function MainLayout({ children, userRole, userName, userEmail }: 
   ];
 
   const teacherNavItems = [
-    { title: 'Dashboard', icon: Home, href: '/teacher' },
-    { title: 'Cursos', icon: Book, href: '/teacher/courses' },
-    { title: 'Matrículas', icon: Users, href: '/teacher/enrollments' },
-    { title: 'Contenidos', icon: GraduationCap, href: '/teacher/contents' },
+    { title: 'Dashboard', icon: Home, href: '/professor' },
+    { title: 'Cursos', icon: Book, href: '/professor/courses' },
+    { title: 'Matrículas', icon: Users, href: '/professor/enrollments' },
+    { title: 'Contenidos', icon: GraduationCap, href: '/professor/contents' },
   ];
 
   const adminNavItems = [
@@ -98,7 +98,7 @@ export default function MainLayout({ children, userRole, userName, userEmail }: 
     { title: 'Contenidos', icon: FileText, href: '/admin/contents' },
   ];
 
-  const navItems = userRole === 'student' ? studentNavItems : userRole === 'teacher' ? teacherNavItems : adminNavItems;
+  const navItems = userRole === 'student' ? studentNavItems : userRole === 'professor' ? teacherNavItems : adminNavItems;
 
   return (
     <SidebarProvider defaultOpen={true} open={open} onOpenChange={setOpen}>
