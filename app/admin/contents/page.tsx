@@ -69,7 +69,7 @@ interface Assignment {
   points: number
   submissions: number
   total_students: number
-  submissions_files: { id: string; file_name: string; url: string; size: number; student_id: string; created_at: string }[]
+  submissions_files: { id: string; file_name: string; url: string; size: number; student_id: string; student_name: string; created_at: string }[]
   created_at: string
   updated_at: string
 }
@@ -1068,60 +1068,64 @@ export default function AdminContentsPage() {
         </Dialog>
 
         <Dialog open={isViewSubmissionsDialogOpen} onOpenChange={setIsViewSubmissionsDialogOpen}>
-          <DialogContent>
+          <DialogContent className="sm:max-w-[750px]">
             <DialogHeader>
               <DialogTitle>Entregas de la tarea</DialogTitle>
               <DialogDescription>Lista de archivos enviados por los estudiantes</DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-6 py-6">
               {selectedAssignment && selectedAssignment.submissions_files.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-6">
                   {selectedAssignment.submissions_files.map((submission) => (
-                    <div key={submission.id} className="flex items-center justify-between border-b py-2">
-                      <div>
+                    <div key={submission.id} className="grid grid-cols-1 md:grid-cols-5 gap-6 items-start border-b py-4">
+                      <div className="col-span-1 md:col-span-4">
                         <p className="font-medium">{submission.file_name}</p>
                         <p className="text-sm text-muted-foreground">
-                          Estudiante ID: {submission.student_id} | Tamaño: {(submission.size / 1024 / 1024).toFixed(1)} MB
+                          Estudiante: {submission.student_name} | Tamaño: {(submission.size / 1024 / 1024).toFixed(1)} MB
                         </p>
                         <p className="text-sm text-muted-foreground">
                           Enviado: {new Date(submission.created_at).toLocaleDateString()}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          placeholder="Nota (0-10)"
-                          value={submissionGrade[submission.id] || ""}
-                          onChange={(e) => setSubmissionGrade({ ...submissionGrade, [submission.id]: e.target.value })}
-                          className="w-24"
-                          min="0"
-                          max="10"
-                          step="0.1"
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={async () => {
-                            if (submissionGrade[submission.id]) {
-                              try {
-                                await api.post(`/assignments/${selectedAssignment?.id}/submissions/${submission.id}/grade`, {
-                                  grade_value: parseFloat(submissionGrade[submission.id]),
-                                  student_id: submission.student_id,
-                                })
-                                setSubmissionGrade({ ...submissionGrade, [submission.id]: "" })
-                                alert("Nota guardada")
-                              } catch (err) {
-                                console.error("Error al guardar la nota:", err)
-                                alert("Error al guardar la nota")
+                      <div className="col-span-1 flex flex-col gap-3 items-end">
+                        <div className="flex flex-row gap-2 items-center">
+                          <Input
+                            type="number"
+                            placeholder="Nota (0-10)"
+                            value={submissionGrade[submission.id] || ""}
+                            onChange={(e) => setSubmissionGrade({ ...submissionGrade, [submission.id]: e.target.value })}
+                            className="w-36"
+                            min="0"
+                            max="10"
+                            step="0.1"
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="min-w-[100px]"
+                            onClick={async () => {
+                              if (submissionGrade[submission.id]) {
+                                try {
+                                  await api.post(`/assignments/${selectedAssignment?.id}/submissions/${submission.id}/grade`, {
+                                    grade_value: parseFloat(submissionGrade[submission.id]),
+                                    student_id: submission.student_id,
+                                  })
+                                  setSubmissionGrade({ ...submissionGrade, [submission.id]: "" })
+                                  alert("Nota guardada")
+                                } catch (err) {
+                                  console.error("Error al guardar la nota:", err)
+                                  alert("Error al guardar la nota")
+                                }
                               }
-                            }
-                          }}
-                        >
-                          Guardar nota
-                        </Button>
+                            }}
+                          >
+                            Guardar nota
+                          </Button>
+                        </div>
                         <Button
                           variant="outline"
                           size="sm"
+                          className="min-w-[100px]"
                           onClick={() => window.open(submission.url, "_blank")}
                         >
                           Descargar
