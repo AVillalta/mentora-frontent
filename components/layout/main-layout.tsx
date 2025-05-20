@@ -91,7 +91,7 @@ export default function MainLayout({ children, userRole, userName, userEmail }: 
     { title: 'Dashboard', icon: Home, href: '/admin' },
     { title: 'Usuarios', icon: Users, href: '/admin/users' },
     { title: 'Semestres', icon: Calendar, href: '/admin/semesters' },
-    { title: 'Asignaturas', icon: Book, href: '/admin/subjects' },
+    { title: 'Asignaturas', icon: Book, href: '/admin/signatures' },
     { title: 'Cursos', icon: GraduationCap, href: '/admin/courses' },
     { title: 'Matrículas', icon: FileText, href: '/admin/enrollments' },
     { title: 'Notas', icon: FileText, href: '/admin/grades' },
