@@ -20,26 +20,45 @@ import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { ChevronDown, Download, Edit, FileText, Plus, Search, Trash, AlertCircle } from "lucide-react"
+import { ChevronDown, Download, Edit, FileText, Plus, Search, Trash, AlertCircle, Link as LinkIcon } from "lucide-react"
 import { AxiosError } from "axios"
+
+interface Assignment {
+  id: string
+  title: string
+  description: string
+  course_id: string
+  course: string
+  due_date: string
+  submissions: number
+  total_students: number
+  submissions_files: {
+    id: string
+    file_name: string
+    url: string
+    size: number
+    student_id: string
+    student_name: string
+    created_at: string
+  }[]
+  created_at: string
+  updated_at: string
+}
 
 interface Grade {
   id: string
+  title: string
   grade_type: string
-  grade_value: number | string | null | undefined
+  grade_value: number | null
   grade_date: string
   enrollment_id: string
-  student_name: string
-  student_email: string | null
+  assignment_id: string
   course_name: string
-  professor_name: string
 }
 
-interface Enrollment {
+interface Course {
   id: string
-  student_name: string
-  student_email: string | null
-  course_name: string
+  signature: string
 }
 
 interface ApiErrorResponse {
@@ -48,17 +67,15 @@ interface ApiErrorResponse {
   errors?: { [key: string]: string[] }
 }
 
-const gradeTypes = ['ordinary', 'extraordinary', 'work', 'partial', 'final']
-
-export default function AdminGradesPage() {
+export default function AdminContentsPage() {
   const router = useRouter()
   const [token, setToken] = useState<string | null>(
     typeof window !== "undefined" ? localStorage.getItem("token") : null
   )
   const [loadingAuth, setLoadingAuth] = useState(true)
   const [authError, setAuthError] = useState<string | null>(null)
-  const [grades, setGrades] = useState<Grade[]>([])
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([])
+  const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
   const [apiError, setApiError] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
@@ -66,23 +83,24 @@ export default function AdminGradesPage() {
   const [userEmail, setUserEmail] = useState("cargando@mentora.edu")
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCourse, setSelectedCourse] = useState("all")
-  const [selectedType, setSelectedType] = useState("all")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [selectedGrade, setSelectedGrade] = useState<Grade | null>(null)
+  const [isViewSubmissionsDialogOpen, setIsViewSubmissionsDialogOpen] = useState(false)
+  const [isGradeDialogOpen, setIsGradeDialogOpen] = useState(false)
+  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null)
+  const [selectedStudent, setSelectedStudent] = useState<{ id: string; name: string } | null>(null)
+  const [gradeValue, setGradeValue] = useState("")
+  const [currentGrade, setCurrentGrade] = useState<Grade | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const createDialogRef = useRef<HTMLDivElement>(null)
-  const editDialogRef = useRef<HTMLDivElement>(null)
+  const gradeDialogRef = useRef<HTMLDivElement>(null)
   const formKey = useRef(Date.now())
 
-  const [gradeFormData, setGradeFormData] = useState({
-    enrollment_id: "",
-    grade_type: "",
-    grade_value: "",
-    grade_date: "",
+  const [assignmentFormData, setAssignmentFormData] = useState({
+    title: "",
+    description: "",
+    course_id: "",
+    due_date: "",
   })
-
-  const courses = [...new Set(enrollments.map((enrollment) => enrollment.course_name))]
 
   const apiWithTimeout = async (url: string, timeoutMs: number = 10000) => {
     const controller = new AbortController()
@@ -139,30 +157,19 @@ export default function AdminGradesPage() {
     const fetchData = async () => {
       try {
         setLoading(true)
-        const [gradesRes, enrollmentsRes] = await Promise.all([
-          apiWithTimeout("/grades"),
-          apiWithTimeout("/enrollments"),
+        const [assignmentsRes, coursesRes] = await Promise.all([
+          apiWithTimeout("/assignments"),
+          apiWithTimeout("/courses"),
         ])
-        const validGrades = gradesRes.data.data.map((grade: Grade) => ({
-          ...grade,
-          grade_value: grade.grade_value != null && typeof grade.grade_value === 'string' 
-            ? parseFloat(grade.grade_value) 
-            : grade.grade_value,
-        })).filter((grade: Grade) => {
-          if (grade.grade_value != null && typeof grade.grade_value !== 'number') {
-            return false
-          }
-          return true
-        })
-        setGrades(validGrades || [])
-        setEnrollments(enrollmentsRes.data.data || [])
-        if (!enrollmentsRes.data.data.length) {
-          setApiError("No se encontraron matrículas. Crea una matrícula primero.")
+        setAssignments(assignmentsRes.data.data || [])
+        setCourses(coursesRes.data.data || [])
+        if (!assignmentsRes.data.data.length) {
+          setApiError("No se encontraron tareas. Crea una tarea primero.")
         }
       } catch (err: unknown) {
         const error = err as AxiosError<ApiErrorResponse>
         setApiError(error.response?.data?.message || error.response?.data?.data || "Error al cargar los datos. Inténtalo de nuevo.")
-        setGrades([])
+        setAssignments([])
       } finally {
         setLoading(false)
       }
@@ -176,12 +183,12 @@ export default function AdminGradesPage() {
     if (formError && isCreateDialogOpen && createDialogRef.current) {
       createDialogRef.current.scrollTop = 0
     }
-    if (formError && isEditDialogOpen && editDialogRef.current) {
-      editDialogRef.current.scrollTop = 0
+    if (formError && isGradeDialogOpen && gradeDialogRef.current) {
+      gradeDialogRef.current.scrollTop = 0
     }
-  }, [formError, isCreateDialogOpen, isEditDialogOpen])
+  }, [formError, isCreateDialogOpen, isGradeDialogOpen])
 
-  const handleCreateGrade = useCallback(async (event: React.FormEvent) => {
+  const handleCreateAssignment = useCallback(async (event: React.FormEvent) => {
     event.preventDefault()
     event.stopPropagation()
     if (isSubmitting) {
@@ -192,107 +199,107 @@ export default function AdminGradesPage() {
 
     try {
       const payload = {
-        ...gradeFormData,
-        grade_value: gradeFormData.grade_value ? parseFloat(gradeFormData.grade_value) : null,
+        ...assignmentFormData,
       }
-      const response = await api.post("/grades", payload)
+      const response = await api.post("/assignments", payload)
       setIsCreateDialogOpen(false)
-      setGradeFormData({ enrollment_id: "", grade_type: "", grade_value: "", grade_date: "" })
+      setAssignmentFormData({ title: "", description: "", course_id: "", due_date: "" })
       formKey.current = Date.now()
       setFormError(null)
-      const gradesResponse = await apiWithTimeout("/grades")
-      setGrades(gradesResponse.data.data || [])
+      const assignmentsResponse = await apiWithTimeout("/assignments")
+      setAssignments(assignmentsResponse.data.data || [])
       setApiError(null)
     } catch (err: unknown) {
       const error = err as AxiosError<ApiErrorResponse>
       const errorMessages = error.response?.data?.errors
         ? Object.values(error.response.data.errors).flat().join(" ")
-        : error.response?.data?.message || error.response?.data?.data || "Error al crear la calificación. Inténtalo de nuevo."
+        : error.response?.data?.message || error.response?.data?.data || "Error al crear la tarea. Inténtalo de nuevo."
       setFormError(errorMessages)
     } finally {
       setIsSubmitting(false)
     }
-  }, [gradeFormData, isSubmitting]) // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignmentFormData, isSubmitting])
 
-  const handleEditGrade = useCallback(async (event: React.FormEvent) => {
+  const handleGradeSubmission = useCallback(async (event: React.FormEvent) => {
     event.preventDefault()
     event.stopPropagation()
-    if (isSubmitting) return
+    if (isSubmitting || !selectedAssignment || !selectedStudent) {
+      return
+    }
     setIsSubmitting(true)
     setFormError(null)
-
-    if (!selectedGrade) return
 
     try {
       const payload = {
-        ...gradeFormData,
-        grade_value: gradeFormData.grade_value ? parseFloat(gradeFormData.grade_value) : null,
+        grade_value: parseFloat(gradeValue),
+        student_id: selectedStudent.id,
       }
-      await api.put(`/grades/${selectedGrade.id}`, payload)
-      setIsEditDialogOpen(false)
-      setGradeFormData({ enrollment_id: "", grade_type: "", grade_value: "", grade_date: "" })
-      setSelectedGrade(null)
+      const response = await api.post(`/assignments/${selectedAssignment.id}/grade/${selectedStudent.id}`, payload)
+      setIsGradeDialogOpen(false)
+      setGradeValue("")
+      setSelectedStudent(null)
+      setCurrentGrade(response.data.data)
       setFormError(null)
-      const response = await apiWithTimeout("/grades")
-      setGrades(response.data.data || [])
-      setApiError(null)
     } catch (err: unknown) {
       const error = err as AxiosError<ApiErrorResponse>
       const errorMessages = error.response?.data?.errors
         ? Object.values(error.response.data.errors).flat().join(" ")
-        : error.response?.data?.message || error.response?.data?.data || "Error al editar la calificación. Inténtalo de nuevo."
+        : error.response?.data?.message || error.response?.data?.data || "Error al calificar la entrega. Inténtalo de nuevo."
       setFormError(errorMessages)
     } finally {
       setIsSubmitting(false)
     }
-  }, [selectedGrade, gradeFormData, isSubmitting]) // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAssignment, selectedStudent, gradeValue, isSubmitting])
 
-  const handleDeleteGrade = async (id: string) => {
+  const handleDeleteAssignment = async (id: string) => {
     if (isSubmitting) return
     setIsSubmitting(true)
     try {
-      await api.delete(`/grades/${id}`)
-      const response = await apiWithTimeout("/grades")
-      setGrades(response.data.data || [])
+      await api.delete(`/assignments/${id}`)
+      const response = await apiWithTimeout("/assignments")
+      setAssignments(response.data.data || [])
       setApiError(null)
     } catch (err: unknown) {
       const error = err as AxiosError<ApiErrorResponse>
-      setApiError(error.response?.data?.message || error.response?.data?.data || "Error al eliminar la calificación. Inténtalo de nuevo.")
+      setApiError(error.response?.data?.message || error.response?.data?.data || "Error al eliminar la tarea. Inténtalo de nuevo.")
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const handleEditClick = (grade: Grade) => {
-    setSelectedGrade(grade)
-    setGradeFormData({
-      enrollment_id: grade.enrollment_id,
-      grade_type: grade.grade_type,
-      grade_value: grade.grade_value != null ? grade.grade_value.toString() : "",
-      grade_date: grade.grade_date,
-    })
-    setFormError(null)
-    setIsEditDialogOpen(true)
+  const handleViewSubmissions = (assignment: Assignment) => {
+    setSelectedAssignment(assignment)
+    setIsViewSubmissionsDialogOpen(true)
   }
 
-  const filteredGrades = grades.filter((grade) => {
+  const handleGradeClick = async (assignment: Assignment, student: { id: string; name: string }) => {
+    setSelectedAssignment(assignment)
+    setSelectedStudent(student)
+    setGradeValue("")
+    setCurrentGrade(null)
+    try {
+      const gradesResponse = await api.get(`/grades?assignment_id=${assignment.id}&student_id=${student.id}`)
+      const grade = gradesResponse.data.data.find(
+        (g: Grade) => g.assignment_id === assignment.id && g.enrollment_id === student.id
+      )
+      if (grade) {
+        setCurrentGrade(grade)
+        setGradeValue(grade.grade_value != null ? grade.grade_value.toString() : "")
+      }
+    } catch (err) {
+      console.error("Error fetching grade:", err)
+    }
+    setIsGradeDialogOpen(true)
+  }
+
+  const filteredAssignments = assignments.filter((assignment) => {
     const matchesSearch =
-      (grade.student_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (grade.student_email || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (grade.course_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (grade.professor_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (grade.grade_type || "").toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCourse = selectedCourse === "all" || grade.course_name === selectedCourse
-    const matchesType = selectedType === "all" || grade.grade_type === selectedType
-
-    return matchesSearch && matchesCourse && matchesType
+      (assignment.title || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (assignment.description || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (assignment.course || "").toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesCourse = selectedCourse === "all" || assignment.course_id === selectedCourse
+    return matchesSearch && matchesCourse
   })
-
-  const formatGradeValue = (value: Grade['grade_value']): string => {
-    if (value == null || value === undefined) return "Pendiente"
-    const num = typeof value === "string" ? parseFloat(value) : value
-    return typeof num === "number" && !isNaN(num) ? num.toFixed(1) : "Pendiente"
-  }
 
   return (
     <MainLayout userRole="admin" userName={userName} userEmail={userEmail}>
@@ -314,29 +321,29 @@ export default function AdminGradesPage() {
             )}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-bold tracking-tight">Calificaciones</h1>
-                <p className="text-muted-foreground">Gestiona las calificaciones de los estudiantes</p>
+                <h1 className="text-3xl font-bold tracking-tight">Tareas</h1>
+                <p className="text-muted-foreground">Gestiona las tareas de los cursos</p>
               </div>
               <div className="flex gap-2">
                 <Dialog open={isCreateDialogOpen} onOpenChange={(open) => {
                   setIsCreateDialogOpen(open)
                   if (!open) {
-                    setGradeFormData({ enrollment_id: "", grade_type: "", grade_value: "", grade_date: "" })
+                    setAssignmentFormData({ title: "", description: "", course_id: "", due_date: "" })
                     formKey.current = Date.now()
                   }
                 }}>
                   <DialogTrigger asChild>
                     <Button className="gap-2" disabled={isSubmitting}>
                       <Plus className="h-4 w-4" />
-                      Nueva Calificación
+                      Nueva Tarea
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-h-[80vh] overflow-y-auto" ref={createDialogRef}>
                     <DialogHeader>
-                      <DialogTitle>Registrar nueva calificación</DialogTitle>
-                      <DialogDescription>Completa la información para registrar una nueva calificación</DialogDescription>
+                      <DialogTitle>Crear nueva tarea</DialogTitle>
+                      <DialogDescription>Completa la información para crear una nueva tarea</DialogDescription>
                     </DialogHeader>
-                    <form key={formKey.current} onSubmit={handleCreateGrade}>
+                    <form key={formKey.current} onSubmit={handleCreateAssignment}>
                       {formError && (
                         <Alert variant="destructive" className="mb-4">
                           <AlertCircle className="h-4 w-4" />
@@ -346,60 +353,49 @@ export default function AdminGradesPage() {
                       )}
                       <div className="grid gap-4 py-4">
                         <div className="grid gap-2">
-                          <Label htmlFor="enrollment">Matrícula</Label>
-                          <select
-                            id="enrollment"
-                            value={gradeFormData.enrollment_id}
-                            onChange={(e) => setGradeFormData({ ...gradeFormData, enrollment_id: e.target.value })}
-                            className="w-full border rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            disabled={isSubmitting}
-                          >
-                            <option value="">Selecciona una matrícula</option>
-                            {enrollments.map((enrollment) => (
-                              <option key={enrollment.id} value={enrollment.id}>
-                                {enrollment.student_name} - {enrollment.course_name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="grade_type">Tipo de evaluación</Label>
-                          <select
-                            id="grade_type"
-                            value={gradeFormData.grade_type}
-                            onChange={(e) => setGradeFormData({ ...gradeFormData, grade_type: e.target.value })}
-                            className="w-full border rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            disabled={isSubmitting}
-                          >
-                            <option value="">Selecciona un tipo</option>
-                            {gradeTypes.map((type) => (
-                              <option key={type} value={type}>
-                                {type.charAt(0).toUpperCase() + type.slice(1)}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="grade_value">Calificación</Label>
+                          <Label htmlFor="title">Título</Label>
                           <Input
-                            id="grade_value"
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            max="10"
-                            value={gradeFormData.grade_value}
-                            onChange={(e) => setGradeFormData({ ...gradeFormData, grade_value: e.target.value })}
-                            placeholder="8.5"
+                            id="title"
+                            value={assignmentFormData.title}
+                            onChange={(e) => setAssignmentFormData({ ...assignmentFormData, title: e.target.value })}
+                            placeholder="Ej. Tarea Final"
                             disabled={isSubmitting}
                           />
                         </div>
                         <div className="grid gap-2">
-                          <Label htmlFor="grade_date">Fecha</Label>
+                          <Label htmlFor="description">Descripción</Label>
                           <Input
-                            id="grade_date"
-                            type="date"
-                            value={gradeFormData.grade_date}
-                            onChange={(e) => setGradeFormData({ ...gradeFormData, grade_date: e.target.value })}
+                            id="description"
+                            value={assignmentFormData.description}
+                            onChange={(e) => setAssignmentFormData({ ...assignmentFormData, description: e.target.value })}
+                            placeholder="Descripción de la tarea"
+                            disabled={isSubmitting}
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="course">Curso</Label>
+                          <select
+                            id="course"
+                            value={assignmentFormData.course_id}
+                            onChange={(e) => setAssignmentFormData({ ...assignmentFormData, course_id: e.target.value })}
+                            className="w-full border rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            disabled={isSubmitting}
+                          >
+                            <option value="">Selecciona un curso</option>
+                            {courses.map((course) => (
+                              <option key={course.id} value={course.id}>
+                                {course.signature}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="due_date">Fecha Límite</Label>
+                          <Input
+                            id="due_date"
+                            type="datetime-local"
+                            value={assignmentFormData.due_date}
+                            onChange={(e) => setAssignmentFormData({ ...assignmentFormData, due_date: e.target.value })}
                             disabled={isSubmitting}
                           />
                         </div>
@@ -409,7 +405,7 @@ export default function AdminGradesPage() {
                           Cancelar
                         </Button>
                         <Button type="submit" disabled={isSubmitting}>
-                          {isSubmitting ? "Registrando..." : "Registrar calificación"}
+                          {isSubmitting ? "Creando..." : "Crear tarea"}
                         </Button>
                       </DialogFooter>
                     </form>
@@ -424,8 +420,8 @@ export default function AdminGradesPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Lista de Calificaciones</CardTitle>
-                <CardDescription>Visualiza y gestiona las calificaciones de los estudiantes</CardDescription>
+                <CardTitle>Lista de Tareas</CardTitle>
+                <CardDescription>Visualiza y gestiona las tareas de los cursos</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -433,7 +429,7 @@ export default function AdminGradesPage() {
                     <div className="relative">
                       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
-                        placeholder="Buscar por estudiante, curso o tipo..."
+                        placeholder="Buscar por título, descripción o curso..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="pl-8 w-full"
@@ -448,20 +444,8 @@ export default function AdminGradesPage() {
                     >
                       <option value="all">Todos los cursos</option>
                       {courses.map((course) => (
-                        <option key={course} value={course}>
-                          {course}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={selectedType}
-                      onChange={(e) => setSelectedType(e.target.value)}
-                      className="w-full sm:w-[180px] border rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="all">Todos los tipos</option>
-                      {gradeTypes.map((type) => (
-                        <option key={type} value={type}>
-                          {type.charAt(0).toUpperCase() + type.slice(1)}
+                        <option key={course.id} value={course.id}>
+                          {course.signature}
                         </option>
                       ))}
                     </select>
@@ -472,54 +456,25 @@ export default function AdminGradesPage() {
                   <table className="w-full caption-bottom text-sm">
                     <thead className="[&_tr]:border-b">
                       <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Estudiante</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Título</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Descripción</th>
                         <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Curso</th>
-                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Profesor</th>
-                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Tipo</th>
-                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Calificación</th>
-                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Fecha</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Fecha Límite</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Entregas</th>
                         <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground">Acciones</th>
                       </tr>
                     </thead>
                     <tbody className="[&_tr:last-child]:border-0">
-                      {filteredGrades.map((grade) => (
+                      {filteredAssignments.map((assignment) => (
                         <tr
-                          key={grade.id}
+                          key={assignment.id}
                           className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
                         >
-                          <td className="p-4 align-middle">
-                            <div className="flex items-center gap-3">
-                              <Avatar>
-                                <AvatarFallback>
-                                  {grade.student_name
-                                    .split(" ")
-                                    .map((n) => n[0])
-                                    .join("")}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <div className="font-medium">{grade.student_name}</div>
-                                <div className="text-xs text-muted-foreground">{grade.student_email || "Sin email"}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="p-4 align-middle">{grade.course_name}</td>
-                          <td className="p-4 align-middle">{grade.professor_name}</td>
-                          <td className="p-4 align-middle">{grade.grade_type.charAt(0).toUpperCase() + grade.grade_type.slice(1)}</td>
-                          <td className="p-4 align-middle font-medium">
-                            <span
-                              className={`inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                                grade.grade_value && typeof grade.grade_value === 'number' && grade.grade_value >= 9
-                                  ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
-                                  : grade.grade_value && typeof grade.grade_value === 'number' && grade.grade_value >= 7
-                                    ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
-                                    : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
-                              }`}
-                            >
-                              {formatGradeValue(grade.grade_value)}
-                            </span>
-                          </td>
-                          <td className="p-4 align-middle">{new Date(grade.grade_date).toLocaleDateString()}</td>
+                          <td className="p-4 align-middle font-medium">{assignment.title}</td>
+                          <td className="p-4 align-middle">{assignment.description}</td>
+                          <td className="p-4 align-middle">{assignment.course}</td>
+                          <td className="p-4 align-middle">{new Date(assignment.due_date).toLocaleDateString()}</td>
+                          <td className="p-4 align-middle">{assignment.submissions}/{assignment.total_students}</td>
                           <td className="p-4 align-middle text-right">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -529,17 +484,13 @@ export default function AdminGradesPage() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleViewSubmissions(assignment)}>
                                   <FileText className="mr-2 h-4 w-4" />
-                                  <span>Ver detalles</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleEditClick(grade)}>
-                                  <Edit className="mr-2 h-4 w-4" />
-                                  <span>Editar</span>
+                                  <span>Ver entregas</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   className="text-destructive"
-                                  onClick={() => handleDeleteGrade(grade.id)}
+                                  onClick={() => handleDeleteAssignment(assignment.id)}
                                 >
                                   <Trash className="mr-2 h-4 w-4" />
                                   <span>Eliminar</span>
@@ -555,13 +506,62 @@ export default function AdminGradesPage() {
               </CardContent>
             </Card>
 
-            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-              <DialogContent className="max-h-[80vh] overflow-y-auto" ref={editDialogRef}>
+            <Dialog open={isViewSubmissionsDialogOpen} onOpenChange={setIsViewSubmissionsDialogOpen}>
+              <DialogContent className="max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Editar calificación</DialogTitle>
-                  <DialogDescription>Modifica la información de la calificación</DialogDescription>
+                  <DialogTitle>Entregas de {selectedAssignment?.title}</DialogTitle>
+                  <DialogDescription>Lista de entregas enviadas por los estudiantes</DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleEditGrade}>
+                <div className="grid gap-4 py-4">
+                  {selectedAssignment?.submissions_files.length ? (
+                    selectedAssignment.submissions_files.map((submission) => (
+                      <div key={submission.id} className="flex items-center justify-between border-b pb-2">
+                        <div>
+                          <p className="font-medium">{submission.file_name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Enviado por: {submission.student_name} el {new Date(submission.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(submission.url, "_blank")}
+                          >
+                            <LinkIcon className="mr-2 h-4 w-4" />
+                            Ver
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => handleGradeClick(selectedAssignment!, {
+                              id: submission.student_id,
+                              name: submission.student_name,
+                            })}
+                          >
+                            Calificar
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-muted-foreground">No hay entregas para esta tarea.</p>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsViewSubmissionsDialogOpen(false)}>
+                    Cerrar
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isGradeDialogOpen} onOpenChange={setIsGradeDialogOpen}>
+              <DialogContent className="max-h-[80vh] overflow-y-auto" ref={gradeDialogRef}>
+                <DialogHeader>
+                  <DialogTitle>Calificar entrega de {selectedStudent?.name}</DialogTitle>
+                  <DialogDescription>Ingrese la calificación para la tarea {selectedAssignment?.title}</DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleGradeSubmission}>
                   {formError && (
                     <Alert variant="destructive" className="mb-4">
                       <AlertCircle className="h-4 w-4" />
@@ -571,70 +571,26 @@ export default function AdminGradesPage() {
                   )}
                   <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="edit-enrollment">Matrícula</Label>
-                      <select
-                        id="edit-enrollment"
-                        value={gradeFormData.enrollment_id}
-                        onChange={(e) => setGradeFormData({ ...gradeFormData, enrollment_id: e.target.value })}
-                        className="w-full border rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        disabled={isSubmitting}
-                      >
-                        <option value="">Selecciona una matrícula</option>
-                        {enrollments.map((enrollment) => (
-                          <option key={enrollment.id} value={enrollment.id}>
-                            {enrollment.student_name} - {enrollment.course_name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="edit-grade_type">Tipo de evaluación</Label>
-                      <select
-                        id="edit-grade_type"
-                        value={gradeFormData.grade_type}
-                        onChange={(e) => setGradeFormData({ ...gradeFormData, grade_type: e.target.value })}
-                        className="w-full border rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        disabled={isSubmitting}
-                      >
-                        <option value="">Selecciona un tipo</option>
-                        {gradeTypes.map((type) => (
-                          <option key={type} value={type}>
-                            {type.charAt(0).toUpperCase() + type.slice(1)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="edit-grade_value">Calificación</Label>
+                      <Label htmlFor="grade_value">Calificación</Label>
                       <Input
-                        id="edit-grade_value"
+                        id="grade_value"
                         type="number"
                         step="0.1"
                         min="0"
                         max="10"
-                        value={gradeFormData.grade_value}
-                        onChange={(e) => setGradeFormData({ ...gradeFormData, grade_value: e.target.value })}
-                        placeholder="8.5"
-                        disabled={isSubmitting}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="edit-grade_date">Fecha</Label>
-                      <Input
-                        id="edit-grade_date"
-                        type="date"
-                        value={gradeFormData.grade_date}
-                        onChange={(e) => setGradeFormData({ ...gradeFormData, grade_date: e.target.value })}
+                        value={gradeValue}
+                        onChange={(e) => setGradeValue(e.target.value)}
+                        placeholder={currentGrade ? `Nota actual: ${currentGrade.grade_value}` : "8.5"}
                         disabled={isSubmitting}
                       />
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={isSubmitting}>
+                    <Button variant="outline" onClick={() => setIsGradeDialogOpen(false)} disabled={isSubmitting}>
                       Cancelar
                     </Button>
                     <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? "Guardando..." : "Guardar cambios"}
+                      {isSubmitting ? "Calificando..." : "Calificar"}
                     </Button>
                   </DialogFooter>
                 </form>

@@ -66,12 +66,22 @@ interface Assignment {
   course_id: string
   course: string | { id: string; name: string; syllabus?: string; syllabus_pdf?: string; professor_id?: string; created_at?: string; updated_at?: string; media?: Media[] }
   due_date: string
-  points: number
   submissions: number
   total_students: number
   submissions_files: { id: string; file_name: string; url: string; size: number; student_id: string; student_name: string; created_at: string }[]
   created_at: string
   updated_at: string
+}
+
+interface Grade {
+  id: string
+  title: string
+  grade_type: string
+  grade_value: number | null
+  grade_date: string
+  enrollment_id: string
+  assignment_id: string
+  course_name: string
 }
 
 interface Course {
@@ -107,6 +117,7 @@ export default function AdminContentsPage() {
   const [selectedContent, setSelectedContent] = useState<Content | null>(null)
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null)
   const [submissionGrade, setSubmissionGrade] = useState<{ [key: string]: string }>({})
+  const [submissionGrades, setSubmissionGrades] = useState<{ [key: string]: Grade | null }>({})
 
   const [contentFormData, setContentFormData] = useState({
     name: "",
@@ -124,14 +135,11 @@ export default function AdminContentsPage() {
     description: "",
     course_id: "",
     due_date: "",
-    points: "100",
   })
 
   // Función auxiliar para obtener el nombre del curso en Assignment
   const getAssignmentCourseName = (assignment: Assignment): string => {
-    console.log("Assignment:", assignment)
     if (!assignment || !assignment.course) {
-      console.warn("Assignment or course is null/undefined:", assignment)
       return "Curso sin nombre"
     }
     if (typeof assignment.course === "string") {
@@ -140,19 +148,15 @@ export default function AdminContentsPage() {
     if (typeof assignment.course === "object" && assignment.course.name) {
       return assignment.course.name
     }
-    console.error("Unexpected course type in assignment:", assignment.course)
     return "Curso sin nombre"
   }
 
   // Función auxiliar para obtener el nombre del curso en Course
   const getCourseName = (course: Course): string => {
-    console.log("Course:", course)
     if (!course || !course.signature) {
-      console.warn("Course or signature is null/undefined:", course)
       return "Curso sin nombre"
     }
     if (typeof course.signature !== "string") {
-      console.error("Unexpected signature type, expected string:", course.signature)
       return "Curso sin nombre"
     }
     return course.signature
@@ -200,16 +204,11 @@ export default function AdminContentsPage() {
           api.get("/courses"),
         ])
 
-        console.log("Courses from API:", coursesRes.data.data)
-        console.log("Assignments from API:", assignmentsRes.data.data)
-        console.log("Contents from API:", contentsRes.data.data)
-
         setContents(contentsRes.data.data || [])
         setAssignments(assignmentsRes.data.data || [])
         setCourses(coursesRes.data.data || [])
       } catch (err: unknown) {
         const error = err as AxiosError<ApiErrorResponse>
-        console.error("API error:", error.response?.data || error.message)
         setError(error.response?.data?.message || "Error al cargar los datos. Inténtalo de nuevo.")
       } finally {
         setLoading(false)
@@ -316,7 +315,6 @@ export default function AdminContentsPage() {
         description: "",
         course_id: "",
         due_date: "",
-        points: "100",
       })
       const response = await api.get("/assignments")
       setAssignments(response.data.data || [])
@@ -337,7 +335,6 @@ export default function AdminContentsPage() {
         description: "",
         course_id: "",
         due_date: "",
-        points: "100",
       })
       setSelectedAssignment(null)
       const response = await api.get("/assignments")
@@ -361,8 +358,34 @@ export default function AdminContentsPage() {
     }
   }
 
-  const handleViewSubmissions = (assignment: Assignment) => {
+  const handleViewSubmissions = async (assignment: Assignment) => {
     setSelectedAssignment(assignment)
+    setSubmissionGrades({})
+    setSubmissionGrade({})
+    try {
+      const gradesResponse = await api.get(`/grades?assignment_id=${assignment.id}`)
+      const grades = gradesResponse.data.data || []
+      const gradeMap: { [key: string]: Grade | null } = {}
+
+      // Agrupar entregas por estudiante y seleccionar la más reciente
+      const latestSubmissions = assignment.submissions_files.reduce((acc, submission) => {
+        const existing = acc[submission.student_id]
+        if (!existing || new Date(submission.created_at) > new Date(existing.created_at)) {
+          acc[submission.student_id] = submission
+        }
+        return acc
+      }, {} as { [key: string]: Assignment['submissions_files'][0] })
+
+      Object.values(latestSubmissions).forEach((submission) => {
+        const grade = grades.find(
+          (g: Grade) => g.assignment_id === assignment.id && g.enrollment_id.includes(submission.student_id)
+        )
+        gradeMap[submission.id] = grade || null
+      })
+      setSubmissionGrades(gradeMap)
+    } catch (err) {
+      console.error("Error fetching grades:", err)
+    }
     setIsViewSubmissionsDialogOpen(true)
   }
 
@@ -388,7 +411,6 @@ export default function AdminContentsPage() {
       description: assignment.description,
       course_id: assignment.course_id,
       due_date: new Date(assignment.due_date).toISOString().split("T")[0],
-      points: assignment.points.toString(),
     })
     setIsEditAssignmentDialogOpen(true)
   }
@@ -694,18 +716,6 @@ export default function AdminContentsPage() {
                             }
                           />
                         </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="points">Puntos</Label>
-                          <Input
-                            id="points"
-                            type="number"
-                            value={assignmentFormData.points}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                              setAssignmentFormData({ ...assignmentFormData, points: e.target.value })
-                            }
-                            placeholder="100"
-                          />
-                        </div>
                       </div>
                       <DialogFooter>
                         <Button variant="outline" onClick={() => setIsCreateAssignmentDialogOpen(false)}>
@@ -831,20 +841,12 @@ export default function AdminContentsPage() {
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-sm">
                             <span>Entregas</span>
-                            <span className="font-medium">
-                              {assignment.submissions} de {assignment.total_students}
-                            </span>
+                            <span className="font-medium">{assignment.submissions} de {assignment.total_students}</span>
                           </div>
-                          <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-800">
+                          <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-800 overflow-hidden">
                             <div
-                              className="h-full rounded-full bg-primary"
-                              style={{
-                                width: `${
-                                  assignment.total_students > 0
-                                    ? (assignment.submissions / assignment.total_students) * 100
-                                    : 0
-                                }%`,
-                              }}
+                              className="h-full rounded-full bg-primary transition-all duration-300"
+                              style={{ width: `${Math.min((assignment.submissions / (assignment.total_students || 1)) * 100, 100)}%` }}
                             />
                           </div>
                         </div>
@@ -1046,17 +1048,6 @@ export default function AdminContentsPage() {
                   }
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-points">Puntos</Label>
-                <Input
-                  id="edit-points"
-                  type="number"
-                  value={assignmentFormData.points}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    setAssignmentFormData({ ...assignmentFormData, points: e.target.value })
-                  }
-                />
-              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsEditAssignmentDialogOpen(false)}>
@@ -1076,63 +1067,85 @@ export default function AdminContentsPage() {
             <div className="grid gap-6 py-6">
               {selectedAssignment && selectedAssignment.submissions_files.length > 0 ? (
                 <div className="space-y-6">
-                  {selectedAssignment.submissions_files.map((submission) => (
-                    <div key={submission.id} className="grid grid-cols-1 md:grid-cols-5 gap-6 items-start border-b py-4">
-                      <div className="col-span-1 md:col-span-4">
-                        <p className="font-medium">{submission.file_name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Estudiante: {submission.student_name} | Tamaño: {(submission.size / 1024 / 1024).toFixed(1)} MB
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Enviado: {new Date(submission.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div className="col-span-1 flex flex-col gap-3 items-end">
-                        <div className="flex flex-row gap-2 items-center">
-                          <Input
-                            type="number"
-                            placeholder="Nota (0-10)"
-                            value={submissionGrade[submission.id] || ""}
-                            onChange={(e) => setSubmissionGrade({ ...submissionGrade, [submission.id]: e.target.value })}
-                            className="w-36"
-                            min="0"
-                            max="10"
-                            step="0.1"
-                          />
+                  {Object.values(
+                    selectedAssignment.submissions_files.reduce((acc, submission) => {
+                      const existing = acc[submission.student_id]
+                      if (!existing || new Date(submission.created_at) > new Date(existing.created_at)) {
+                        acc[submission.student_id] = submission
+                      }
+                      return acc
+                    }, {} as { [key: string]: Assignment['submissions_files'][0] })
+                  ).map((submission) => {
+                    const grade = submissionGrades[submission.id]
+                    return (
+                      <div key={submission.id} className="grid grid-cols-1 md:grid-cols-5 gap-6 items-start border-b py-4">
+                        <div className="col-span-1 md:col-span-4">
+                          <p className="font-medium">{submission.student_name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Archivo: {submission.file_name} | Tamaño: {(submission.size / 1024 / 1024).toFixed(1)} MB
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Enviado: {new Date(submission.created_at).toLocaleDateString()}
+                          </p>
+                          {grade && grade.grade_value != null && (
+                            <p className="text-sm font-medium text-primary">
+                              Nota actual: {grade.grade_value.toFixed(1)}
+                            </p>
+                          )}
+                        </div>
+                        <div className="col-span-1 flex flex-col gap-3 items-end">
+                          <div className="flex flex-row gap-2 items-center">
+                            <Input
+                              type="number"
+                              placeholder="Nota (0-10)"
+                              value={submissionGrade[submission.id] || ""}
+                              onChange={(e) => setSubmissionGrade({ ...submissionGrade, [submission.id]: e.target.value })}
+                              className="w-36"
+                              min="0"
+                              max="10"
+                              step="0.1"
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="min-w-[100px]"
+                              onClick={async () => {
+                                if (submissionGrade[submission.id]) {
+                                  try {
+                                    await api.post(`/assignments/${selectedAssignment?.id}/submissions/${submission.id}/grade`, {
+                                      grade_value: parseFloat(submissionGrade[submission.id]),
+                                      student_id: submission.student_id,
+                                    })
+                                    const gradesResponse = await api.get(`/grades?assignment_id=${selectedAssignment?.id}`)
+                                    const grades = gradesResponse.data.data || []
+                                    const updatedGrade = grades.find(
+                                      (g: Grade) => g.assignment_id === selectedAssignment?.id && g.enrollment_id.includes(submission.student_id)
+                                    )
+                                    setSubmissionGrades((prev) => ({ ...prev, [submission.id]: updatedGrade || null }))
+                                    setSubmissionGrade((prev) => ({ ...prev, [submission.id]: "" }))
+                                    alert("Nota guardada")
+                                  } catch (err) {
+                                    console.error("Error al guardar la nota:", err)
+                                    alert("Error al guardar la nota")
+                                  }
+                                }
+                              }}
+                            >
+                              Guardar nota
+                            </Button>
+                          </div>
                           <Button
                             variant="outline"
                             size="sm"
                             className="min-w-[100px]"
-                            onClick={async () => {
-                              if (submissionGrade[submission.id]) {
-                                try {
-                                  await api.post(`/assignments/${selectedAssignment?.id}/submissions/${submission.id}/grade`, {
-                                    grade_value: parseFloat(submissionGrade[submission.id]),
-                                    student_id: submission.student_id,
-                                  })
-                                  setSubmissionGrade({ ...submissionGrade, [submission.id]: "" })
-                                  alert("Nota guardada")
-                                } catch (err) {
-                                  console.error("Error al guardar la nota:", err)
-                                  alert("Error al guardar la nota")
-                                }
-                              }
-                            }}
+                            onClick={() => window.open(submission.url, "_blank")}
                           >
-                            Guardar nota
+                            Descargar
                           </Button>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="min-w-[100px]"
-                          onClick={() => window.open(submission.url, "_blank")}
-                        >
-                          Descargar
-                        </Button>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               ) : (
                 <p className="text-center text-muted-foreground">No hay entregas para esta tarea.</p>

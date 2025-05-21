@@ -135,7 +135,6 @@ export default function MainLayout({ children, userRole, userName, userEmail }: 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Avatar>
-                  <AvatarImage src="/placeholder.svg" />
                   <AvatarFallback>{getInitials(userName)}</AvatarFallback>
                 </Avatar>
                 <div className="space-y-0.5">
