@@ -1,7 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import api from "@/lib/api"
+import MainLayout from "@/components/layout/main-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -16,13 +18,19 @@ import {
   Line,
   Legend,
 } from "recharts"
-import MainLayout from "@/components/layout/main-layout"
-import { Book, FileText, GraduationCap, Users } from "lucide-react"
+import { Book, Calendar, Clock, FileText, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { useRouter } from "next/navigation"
+import { Badge } from "@/components/ui/badge"
+import Link from "next/link"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
+import { AxiosError } from "axios"
 
-// Interfaces basadas en la API
 interface Course {
   id: number
   signature: string
@@ -30,15 +38,10 @@ interface Course {
   semester: string
   professor: string
   enrollments_count: number
-}
-
-interface Enrollment {
-  id: number
-  course_id: number
-  student_id: number
-  student_name: string
-  course_name: string
-  created_at: string
+  progress?: number
+  next_class?: string
+  pending_assignments?: number
+  new_messages?: number
 }
 
 interface Grade {
@@ -63,10 +66,24 @@ interface Content {
   updated_at: string
 }
 
+interface Event {
+  id: number
+  title: string
+  course: string
+  date: string
+  time: string
+}
+
 interface CourseStats {
+  id: number
   name: string
   students: number
   avgGrade: number
+  pendingAssignments: number
+  newMessages: number
+  nextClass: string
+  progress: number
+  gradient: string
 }
 
 interface GradeDistribution {
@@ -79,6 +96,12 @@ interface GradeEvolution {
   [key: string]: number | string
 }
 
+interface ApiErrorResponse {
+  message?: string
+  data?: string
+  errors?: { [key: string]: string[] }
+}
+
 export default function ProfessorDashboard() {
   const router = useRouter()
   const [token, setToken] = useState<string | null>(
@@ -87,9 +110,9 @@ export default function ProfessorDashboard() {
   const [loadingAuth, setLoadingAuth] = useState(true)
   const [authError, setAuthError] = useState<string | null>(null)
   const [courses, setCourses] = useState<Course[]>([])
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([])
   const [grades, setGrades] = useState<Grade[]>([])
-  const [contents, setContents] = useState<Content[]>([]) // Estado para contenidos
+  const [contents, setContents] = useState<Content[]>([])
+  const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [userName, setUserName] = useState("Cargando...")
@@ -98,67 +121,65 @@ export default function ProfessorDashboard() {
   // Verificar autenticación
   useEffect(() => {
     if (!token) {
-      console.log("No token found, redirecting to login")
       setAuthError("No estás autenticado. Redirigiendo al login...")
       router.push("/login")
-    } else {
-      console.log("Token encontrado, verificando usuario...")
-      api.get("/user")
-        .then((response) => {
-          console.log("User response:", response.data)
-          const role = response.data.data.role
-          const name = response.data.data.name || "Usuario Desconocido"
-          const email = response.data.data.email || "sin@correo.com"
-          console.log("Rol obtenido:", role, "Nombre:", name, "Email:", email)
-          if (role !== "professor") {
-            console.log("Acceso denegado: rol no es professor, role =", role)
-            setAuthError("Acceso denegado. Redirigiendo al login...")
-            localStorage.removeItem("token")
-            router.push("/login")
-          } else {
-            console.log("Autenticación exitosa, cargando dashboard")
-            setUserName(name)
-            setUserEmail(email)
-            setLoadingAuth(false)
-          }
-        })
-        .catch((err) => {
-          console.error("Token verification error:", err)
-          setAuthError("Token inválido. Redirigiendo al login...")
-          localStorage.removeItem("token")
-          router.push("/login")
-        })
+      return
     }
+
+    const verifyUser = async () => {
+      try {
+        console.log("Verificando usuario...")
+        const response = await api.get("/user", { timeout: 10000 })
+        const { role, name, email } = response.data.data || {}
+        console.log("Usuario verificado:", { role, name, email })
+        if (role !== "professor") {
+          throw new Error("Acceso denegado. No eres profesor.")
+        }
+        setUserName(name || "Profesor")
+        setUserEmail(email || "profesor@mentora.edu")
+        setLoadingAuth(false)
+      } catch (err: unknown) {
+        const error = err as AxiosError<ApiErrorResponse>
+        console.error("Error al verificar usuario:", error.message, error.response?.data)
+        setAuthError(error.response?.data?.message || "Token inválido. Redirigiendo al login...")
+        localStorage.removeItem("token")
+        router.push("/login")
+      }
+    }
+
+    verifyUser()
   }, [token, router])
 
   // Cargar datos
   useEffect(() => {
-    const fetchData = async () => {
-      if (loadingAuth || authError) return
+    if (loadingAuth || authError) return
 
+    const fetchData = async () => {
       try {
         setLoading(true)
-        const [coursesRes, enrollmentsRes, gradesRes, contentsRes] = await Promise.all([
-          api.get("/courses"),
-          api.get("/enrollments"),
-          api.get("/grades"),
-          api.get("/contents"), // Añadido endpoint para contenidos
+        console.log("Iniciando fetch de datos...")
+        const [coursesRes, gradesRes, contentsRes, eventsRes] = await Promise.all([
+          api.get("/courses", { timeout: 10000 }),
+          api.get("/grades", { timeout: 10000 }),
+          api.get("/contents", { timeout: 10000 }),
+          api.get("/events", { timeout: 10000 }).catch(() => ({ data: { data: [] } })),
         ])
-
-        console.log("Courses response:", coursesRes.data)
-        console.log("Enrollments response:", enrollmentsRes.data)
-        console.log("Grades response:", gradesRes.data)
-        console.log("Contents response:", contentsRes.data)
-
+        console.log("Respuesta de /courses:", coursesRes.data)
+        console.log("Respuesta de /grades:", gradesRes.data)
+        console.log("Respuesta de /contents:", contentsRes.data)
+        console.log("Respuesta de /events:", eventsRes.data)
         setCourses(coursesRes.data.data || [])
-        setEnrollments(enrollmentsRes.data.data || [])
         setGrades(gradesRes.data.data || [])
-        setContents(contentsRes.data.data || []) // Establecer contenidos
+        setContents(contentsRes.data.data || [])
+        setEvents(eventsRes.data.data || [])
+        setError(null)
       } catch (err: unknown) {
-        setError("Error al cargar los datos. Inténtalo de nuevo.")
-        console.error("Fetch error:", err)
+        const error = err as AxiosError<ApiErrorResponse>
+        console.error("Error al cargar datos:", error.response?.data || error.message)
+        setError(error.response?.data?.message || "Error al cargar los datos. Inténtalo de nuevo.")
       } finally {
         setLoading(false)
+        console.log("Fetch de datos completado, loading:", false)
       }
     }
 
@@ -166,16 +187,33 @@ export default function ProfessorDashboard() {
   }, [loadingAuth, authError])
 
   // Procesar estadísticas de cursos
-  const computeCourseStats = (courses: Course[], grades: Grade[]): CourseStats[] => {
-    return courses.map((course) => {
+  const computeCourseStats = (courses: Course[], grades: Grade[], contents: Content[]): CourseStats[] => {
+    const gradientColors = [
+      'from-blue-500 to-blue-700',
+      'from-green-500 to-green-700',
+      'from-purple-500 to-purple-700',
+      'from-red-500 to-red-700',
+      'from-indigo-500 to-indigo-700',
+    ]
+    return courses.map((course, index) => {
       const courseGrades = grades.filter((grade) => grade.course_id === course.id)
       const avgGrade = courseGrades.length
         ? courseGrades.reduce((sum, grade) => sum + grade.grade_value, 0) / courseGrades.length
         : 0
+      const courseContents = contents.filter((content) => content.course_id === course.id)
+      const pendingAssignments = courseContents.filter(
+        (content) => content.grade_id === null && new Date(content.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      ).length
       return {
+        id: course.id,
         name: course.signature,
         students: course.enrollments_count,
         avgGrade: parseFloat(avgGrade.toFixed(1)),
+        pendingAssignments,
+        newMessages: 0, // Simulado
+        nextClass: course.next_class || "No programada",
+        progress: course.progress || Math.floor(Math.random() * 50 + 50), // Simulado
+        gradient: gradientColors[index % gradientColors.length],
       }
     })
   }
@@ -221,39 +259,77 @@ export default function ProfessorDashboard() {
     )
   }
 
-  // Obtener matrículas recientes
-  const recentEnrollments = enrollments
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 5)
-
-  const courseStats = computeCourseStats(courses, grades)
+  const courseStats = computeCourseStats(courses, grades, contents)
   const gradeDistribution = computeGradeDistribution(grades)
   const gradeEvolution = computeGradeEvolution(courses, grades)
+  const COLORS = ["#1976d2", "#dc004e", "#ff9800", "#388e3c"]
 
-  const COLORS = ["#1976d2", "#dc004e", "#ff9800"]
+  // Simular próxima clase si no hay datos
+  const nextClass = courseStats.length > 0 ? courseStats[0].nextClass : "No programada"
 
   if (loadingAuth) {
-    return <div>Verificando autenticación...</div>
+    return (
+      <MainLayout userRole="professor" userName={userName} userEmail={userEmail}>
+        <div className="flex flex-col items-center justify-center h-[50vh]">
+          <p className="text-xl">Verificando autenticación...</p>
+        </div>
+      </MainLayout>
+    )
   }
 
   if (authError) {
-    return <div className="text-red-500">{authError}</div>
+    return (
+      <MainLayout userRole="professor" userName={userName} userEmail={userEmail}>
+        <div className="flex flex-col items-center justify-center h-[50vh]">
+          <p className="text-red-500 text-xl">{authError}</p>
+        </div>
+      </MainLayout>
+    )
   }
 
   if (loading) {
-    return <div>Cargando...</div>
+    return (
+      <MainLayout userRole="professor" userName={userName} userEmail={userEmail}>
+        <div className="flex flex-col items-center justify-center h-[50vh]">
+          <p className="text-xl">Cargando...</p>
+        </div>
+      </MainLayout>
+    )
   }
 
   if (error) {
-    return <div className="text-red-500">{error}</div>
+    return (
+      <MainLayout userRole="professor" userName={userName} userEmail={userEmail}>
+        <div className="flex flex-col items-center justify-center h-[50vh]">
+          <h1 className="text-2xl font-bold">{error}</h1>
+          <p className="text-muted-foreground mt-2">Ocurrió un problema al cargar los datos.</p>
+          <Button asChild className="mt-4">
+            <Link href="/professor">Volver a intentar</Link>
+          </Button>
+        </div>
+      </MainLayout>
+    )
   }
 
   return (
     <MainLayout userRole="professor" userName={userName} userEmail={userEmail}>
       <div className="flex flex-col gap-6">
+        {/* Breadcrumbs */}
+        <Breadcrumb className="mb-2">
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href="/professor">Dashboard</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink>Profesor</BreadcrumbLink>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+
         <h1 className="text-3xl font-bold tracking-tight">Dashboard Profesor</h1>
         <p className="text-muted-foreground">
-          Bienvenido de nuevo, {userName}. Aquí tienes un resumen de tus cursos y estudiantes.
+          Bienvenido de nuevo, {userName}. Aquí tienes un resumen de tus cursos y actividades.
         </p>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -293,22 +369,66 @@ export default function ProfessorDashboard() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Contenidos Publicados</CardTitle>
-              <GraduationCap className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Próxima Clase</CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{contents.length}</div>
-              <p className="text-xs text-muted-foreground">Este semestre</p>
+              <div className="text-2xl font-bold">{nextClass.split(",")[0]}</div>
+              <p className="text-xs text-muted-foreground">{nextClass}</p>
             </CardContent>
           </Card>
         </div>
 
-        <Tabs defaultValue="overview" className="space-y-4">
+        <Tabs defaultValue="courses" className="space-y-4">
           <TabsList>
-            <TabsTrigger value="overview">Resumen</TabsTrigger>
-            <TabsTrigger value="courses">Cursos</TabsTrigger>
-            <TabsTrigger value="enrollments">Matrículas Recientes</TabsTrigger>
+            <TabsTrigger value="courses">Mis Cursos</TabsTrigger>
+            <TabsTrigger value="overview">Estadísticas</TabsTrigger>
+            <TabsTrigger value="calendar">Próximos Eventos</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="courses" className="space-y-4">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {courseStats.map((course) => (
+                <Link href={`/teacher/courses/${course.id}`} key={course.id} className="block">
+                  <Card className="h-full overflow-hidden transition-all hover:shadow-md">
+                    <div className={`aspect-video w-full bg-gradient-to-r ${course.gradient} flex items-center justify-center transition-all hover:scale-105`}>
+                      <Book className="h-16 w-16 text-white opacity-80" />
+                    </div>
+                    <CardHeader className="p-4 pb-2">
+                      <div className="flex justify-between items-start">
+                        <CardTitle className="text-xl">{course.name}</CardTitle>
+                        {course.pendingAssignments > 0 && (
+                          <Badge variant="destructive">{course.pendingAssignments} pendientes</Badge>
+                        )}
+                      </div>
+                      <CardDescription>
+                        {course.students} estudiantes • Nota media: {course.avgGrade.toFixed(1)}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0 space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Progreso del curso</span>
+                        <span className="font-medium">{course.progress}%</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${course.progress}%` }} />
+                      </div>
+                      <div className="flex items-center justify-between pt-2 text-sm">
+                        <div className="flex items-center">
+                          <Clock className="mr-1 h-4 w-4 text-muted-foreground" />
+                          <span>{course.nextClass}</span>
+                        </div>
+                        <Button variant="ghost" size="sm" className="gap-1">
+                          <span>Ver curso</span>
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </TabsContent>
+
           <TabsContent value="overview" className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
               <Card className="col-span-4">
@@ -354,100 +474,47 @@ export default function ProfessorDashboard() {
               </Card>
             </div>
           </TabsContent>
-          <TabsContent value="courses">
+
+          <TabsContent value="calendar" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Mis Cursos</CardTitle>
-                <CardDescription>Cursos que impartes actualmente</CardDescription>
+                <CardTitle>Próximos Eventos</CardTitle>
+                <CardDescription>Calendario de actividades programadas</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="rounded-md border">
-                  <table className="w-full caption-bottom text-sm">
-                    <thead className="[&_tr]:border-b">
-                      <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Curso</th>
-                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
-                          Estudiantes
-                        </th>
-                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
-                          Nota Media
-                        </th>
-                        <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground">
-                          Acciones
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="[&_tr:last-child]:border-0">
-                      {courseStats.map((course, index) => (
-                        <tr
-                          key={index}
-                          className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
-                        >
-                          <td className="p-4 align-middle font-medium">{course.name}</td>
-                          <td className="p-4 align-middle">{course.students}</td>
-                          <td className="p-4 align-middle">
-                            <span
-                              className={`inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                                course.avgGrade >= 9
-                                  ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
-                                  : course.avgGrade >= 7
-                                    ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
-                                    : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
-                              }`}
-                            >
-                              {course.avgGrade.toFixed(1)}
+                <div className="space-y-6">
+                  {events.length === 0 ? (
+                    <p className="text-center text-muted-foreground">No hay eventos programados.</p>
+                  ) : (
+                    events.map((event) => (
+                      <div key={event.id} className="flex items-start space-x-4">
+                        <div className="min-w-[60px] rounded-md bg-primary/10 p-3 text-center">
+                          <div className="text-sm font-medium text-primary">
+                            {
+                              new Date(event.date)
+                                .toLocaleDateString("es-ES", { day: "2-digit", month: "short" })
+                                .split(" ")[0]
+                            }
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(event.date).toLocaleDateString("es-ES", { month: "short" }).split(" ")[0]}
+                          </div>
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium leading-none">{event.title}</p>
+                            <Badge variant="outline">{event.course}</Badge>
+                          </div>
+                          <div className="flex items-center text-xs text-muted-foreground">
+                            <Calendar className="mr-1 h-3 w-3" />
+                            <span>
+                              {new Date(event.date).toLocaleDateString()} • {event.time}
                             </span>
-                          </td>
-                          <td className="p-4 align-middle text-right">
-                            <Button variant="outline" size="sm">
-                              Ver detalles
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          <TabsContent value="enrollments">
-            <Card>
-              <CardHeader>
-                <CardTitle>Matrículas Recientes</CardTitle>
-                <CardDescription>Últimos estudiantes matriculados en tus cursos</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {recentEnrollments.map((enrollment) => (
-                    <div
-                      key={enrollment.id}
-                      className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0"
-                    >
-                      <div className="flex items-center gap-4">
-                        <Avatar>
-                          <AvatarFallback>
-                            {enrollment.student_name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium">{enrollment.student_name}</p>
-                          <p className="text-sm text-muted-foreground">{enrollment.course_name}</p>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-sm text-muted-foreground">
-                          {new Date(enrollment.created_at).toLocaleDateString()}
-                        </div>
-                        <Button variant="outline" size="sm">
-                          Ver perfil
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>
