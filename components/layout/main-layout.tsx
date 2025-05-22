@@ -1,8 +1,8 @@
-'use client';
+"use client"
 
-import type React from 'react';
-import { useState } from 'react';
-import { usePathname } from 'next/navigation';
+import type React from "react"
+import { useState, useEffect } from "react"
+import { usePathname, useRouter } from "next/navigation"
 import {
   Book,
   ChevronDown,
@@ -15,7 +15,7 @@ import {
   Sun,
   Users,
   Calendar,
-} from 'lucide-react';
+} from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -29,9 +29,9 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
-} from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+} from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,66 +39,69 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { useTheme } from 'next-themes';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+} from "@/components/ui/dropdown-menu"
+import { useTheme } from "next-themes"
 
 interface MainLayoutProps {
-  children: React.ReactNode;
-  userRole: 'student' | 'professor' | 'admin';
-  userName: string;
-  userEmail: string;
+  children: React.ReactNode
+  userRole: "student" | "professor" | "admin"
+  userName: string
+  userEmail: string
+  profilePhotoUrl?: string | null
 }
 
-export default function MainLayout({ children, userRole, userName, userEmail }: MainLayoutProps) {
-  const pathname = usePathname();
-  const { theme, setTheme } = useTheme();
-  const [open, setOpen] = useState(true);
-  const router = useRouter();
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+export default function MainLayout({ children, userRole, userName, userEmail, profilePhotoUrl }: MainLayoutProps) {
+  const pathname = usePathname()
+  const { theme, setTheme } = useTheme()
+  const [open, setOpen] = useState(true)
+  const router = useRouter()
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
 
-  // Verificar autenticación
   useEffect(() => {
     if (!token) {
-      router.push('/login');
+      router.push("/login")
     }
-  }, [token, router]);
+  }, [token, router])
 
   const getInitials = (name: string) => {
     return name
-      .split(' ')
+      .split(" ")
       .map((part) => part[0])
-      .join('')
-      .toUpperCase();
-  };
+      .join("")
+      .toUpperCase()
+  }
 
   const studentNavItems = [
-    { title: 'Dashboard', icon: Home, href: '/student' },
-    { title: 'Cursos', icon: Book, href: '/student/courses' },
-    { title: 'Notas', icon: FileText, href: '/student/grades' },
-    { title: 'Contenidos', icon: GraduationCap, href: '/student/contents' },
-  ];
+    { title: "Dashboard", icon: Home, href: "/student" },
+    { title: "Cursos", icon: Book, href: "/student/courses" },
+    { title: "Notas", icon: FileText, href: "/student/grades" },
+    { title: "Contenidos", icon: GraduationCap, href: "/student/contents" },
+  ]
 
   const teacherNavItems = [
-    { title: 'Dashboard', icon: Home, href: '/professor' },
-    { title: 'Cursos', icon: Book, href: '/professor/courses' },
-    { title: 'Matrículas', icon: Users, href: '/professor/enrollments' },
-    { title: 'Contenidos', icon: GraduationCap, href: '/professor/contents' },
-  ];
+    { title: "Dashboard", icon: Home, href: "/professor" },
+    { title: "Cursos", icon: Book, href: "/professor/courses" },
+    { title: "Matrículas", icon: Users, href: "/professor/enrollments" },
+    { title: "Contenidos", icon: GraduationCap, href: "/professor/contents" },
+  ]
 
   const adminNavItems = [
-    { title: 'Dashboard', icon: Home, href: '/admin' },
-    { title: 'Usuarios', icon: Users, href: '/admin/users' },
-    { title: 'Semestres', icon: Calendar, href: '/admin/semesters' },
-    { title: 'Asignaturas', icon: Book, href: '/admin/signatures' },
-    { title: 'Cursos', icon: GraduationCap, href: '/admin/courses' },
-    { title: 'Matrículas', icon: FileText, href: '/admin/enrollments' },
-    { title: 'Notas', icon: FileText, href: '/admin/grades' },
-    { title: 'Contenidos', icon: FileText, href: '/admin/contents' },
-  ];
+    { title: "Dashboard", icon: Home, href: "/admin" },
+    { title: "Usuarios", icon: Users, href: "/admin/users" },
+    { title: "Semestres", icon: Calendar, href: "/admin/semesters" },
+    { title: "Asignaturas", icon: Book, href: "/admin/signatures" },
+    { title: "Cursos", icon: GraduationCap, href: "/admin/courses" },
+    { title: "Matrículas", icon: FileText, href: "/admin/enrollments" },
+    { title: "Notas", icon: FileText, href: "/admin/grades" },
+    { title: "Contenidos", icon: FileText, href: "/admin/contents" },
+  ]
 
-  const navItems = userRole === 'student' ? studentNavItems : userRole === 'professor' ? teacherNavItems : adminNavItems;
+  const navItems = userRole === "student" ? studentNavItems : userRole === "professor" ? teacherNavItems : adminNavItems
+
+  // Función para redirigir a la página de perfil unificada
+  const handleSettingsClick = () => {
+    router.push("/profile")
+  }
 
   return (
     <SidebarProvider defaultOpen={true} open={open} onOpenChange={setOpen}>
@@ -135,7 +138,11 @@ export default function MainLayout({ children, userRole, userName, userEmail }: 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Avatar>
-                  <AvatarFallback>{getInitials(userName)}</AvatarFallback>
+                  {profilePhotoUrl ? (
+                    <AvatarImage src={profilePhotoUrl} alt={`${userName}'s profile photo`} />
+                  ) : (
+                    <AvatarFallback>{getInitials(userName)}</AvatarFallback>
+                  )}
                 </Avatar>
                 <div className="space-y-0.5">
                   <p className="text-sm font-medium">{userName}</p>
@@ -151,19 +158,19 @@ export default function MainLayout({ children, userRole, userName, userEmail }: 
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Mi cuenta</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-                    {theme === 'dark' ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
-                    <span>{theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}</span>
+                  <DropdownMenuItem onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+                    {theme === "dark" ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
+                    <span>{theme === "dark" ? "Modo claro" : "Modo oscuro"}</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleSettingsClick}>
                     <Settings className="mr-2 h-4 w-4" />
                     <span>Configuración</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={() => {
-                      localStorage.removeItem('token');
-                      router.push('/login');
+                      localStorage.removeItem("token")
+                      router.push("/login")
                     }}
                   >
                     <LogOut className="mr-2 h-4 w-4" />
@@ -178,8 +185,8 @@ export default function MainLayout({ children, userRole, userName, userEmail }: 
           <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-6 md:px-8">
             <SidebarTrigger />
             <div className="flex-1" />
-            <Button variant="outline" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-              {theme === 'dark' ? (
+            <Button variant="outline" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+              {theme === "dark" ? (
                 <Sun className="h-[1.2rem] w-[1.2rem]" />
               ) : (
                 <Moon className="h-[1.2rem] w-[1.2rem]" />
@@ -190,22 +197,30 @@ export default function MainLayout({ children, userRole, userName, userEmail }: 
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full">
                   <Avatar className="h-8 w-8">
-                    <AvatarFallback>{getInitials(userName)}</AvatarFallback>
+                    {profilePhotoUrl ? (
+                      <AvatarImage src={profilePhotoUrl} alt={`${userName}'s profile photo`} />
+                    ) : (
+                      <AvatarFallback>{getInitials(userName)}</AvatarFallback>
+                    )}
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Mi cuenta</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+                  {theme === "dark" ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
+                  <span>{theme === "dark" ? "Modo claro" : "Modo oscuro"}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleSettingsClick}>
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Configuración</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => {
-                    localStorage.removeItem('token');
-                    router.push('/login');
+                    localStorage.removeItem("token")
+                    router.push("/login")
                   }}
                 >
                   <LogOut className="mr-2 h-4 w-4" />
@@ -216,7 +231,7 @@ export default function MainLayout({ children, userRole, userName, userEmail }: 
           </header>
           <main className="flex-1 p-6 md:p-8 w-full max-w-full overflow-x-auto">{children}</main>
           <footer className="border-t border-gray-200 dark:border-gray-800 p-4 text-center text-sm text-muted-foreground">
-            Mentora © {new Date().getFullYear()} |{' '}
+            Mentora © {new Date().getFullYear()} |{" "}
             <a href="#" className="hover:underline">
               Términos de uso
             </a>
@@ -224,5 +239,5 @@ export default function MainLayout({ children, userRole, userName, userEmail }: 
         </div>
       </div>
     </SidebarProvider>
-  );
+  )
 }
