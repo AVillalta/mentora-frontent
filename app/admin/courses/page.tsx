@@ -1,11 +1,11 @@
-"use client"
+"use client";
 
-import { useState, useEffect, ChangeEvent } from "react"
-import api from "@/lib/api"
-import MainLayout from "@/components/layout/main-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect, ChangeEvent } from "react";
+import api from "@/lib/api";
+import MainLayout from "@/components/layout/main-layout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -14,149 +14,172 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Book, ChevronDown, Edit, Plus, Search, Trash, Users } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { AxiosError } from "axios"
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Book, ChevronDown, Edit, Plus, Search, Trash, Users } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { AxiosError } from "axios";
+import useAuth from "@/hooks/useAuth";
 
 interface Course {
-  id: string
-  code: string
-  schedule: string[] | { day: string; time: string }[] | null
-  weighting: { homework: number; midterms: number; final_exam: number } | null
-  signature: string | null
-  semester: string | null
-  professor: string | null
-  enrollments_count: number
-  status: "active" | "inactive"
+  id: string;
+  code: string;
+  schedule: { day: string; start_time: string; end_time: string }[] | null;
+  weighting: { homework: number; midterms: number; final_exam: number } | null;
+  signature: string | null;
+  semester: string | null;
+  professor: string | null;
+  enrollments_count: number;
+  status: "active" | "inactive";
 }
 
 interface Signature {
-  id: string
-  name: string
+  id: string;
+  name: string;
 }
 
 interface Professor {
-  id: string
-  name: string
+  id: string;
+  name: string;
 }
 
 interface Semester {
-  id: string
-  name: string
-  is_active: boolean
+  id: string;
+  name: string;
+  is_active: boolean;
 }
 
 interface ApiErrorResponse {
-  message: string
+  message: string;
 }
 
 export default function AdminCoursesPage() {
-  const router = useRouter()
-  const [token, setToken] = useState<string | null>(
-    typeof window !== "undefined" ? localStorage.getItem("token") : null
-  )
-  const [loadingAuth, setLoadingAuth] = useState(true)
-  const [authError, setAuthError] = useState<string | null>(null)
-  const [courses, setCourses] = useState<Course[]>([])
-  const [signatures, setSignatures] = useState<Signature[]>([])
-  const [professors, setProfessors] = useState<Professor[]>([])
-  const [semesters, setSemesters] = useState<Semester[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [userName, setUserName] = useState("Cargando...")
-  const [userEmail, setUserEmail] = useState("cargando@mentora.edu")
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedSubject, setSelectedSubject] = useState("all")
-  const [selectedSemester, setSelectedSemester] = useState("all")
-  const [showInactive, setShowInactive] = useState(false) // Estado para el filtro
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null)
-
+  const router = useRouter();
+  const { user, loading: loadingAuth, error: authError } = useAuth("admin");
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [signatures, setSignatures] = useState<Signature[]>([]);
+  const [professors, setProfessors] = useState<Professor[]>([]);
+  const [semesters, setSemesters] = useState<Semester[]>([]);
+  const [loadingCourses, setLoadingCourses] = useState(true);
+  const [loadingSignatures, setLoadingSignatures] = useState(true);
+  const [loadingProfessors, setLoadingProfessors] = useState(true);
+  const [loadingSemesters, setLoadingSemesters] = useState(true);
+  const [errorCourses, setErrorCourses] = useState<string | null>(null);
+  const [errorSignatures, setErrorSignatures] = useState<string | null>(null);
+  const [errorProfessors, setErrorProfessors] = useState<string | null>(null);
+  const [errorSemesters, setErrorSemesters] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedSubject, setSelectedSubject] = useState("all");
+  const [selectedSemester, setSelectedSemester] = useState("all");
+  const [showInactive, setShowInactive] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [courseFormData, setCourseFormData] = useState({
     code: "",
-    schedule: "",
+    scheduleDay: "",
+    scheduleStartTime: "",
+    scheduleEndTime: "",
     weighting: { homework: "0.3", midterms: "0.4", final_exam: "0.3" },
     signature_id: "",
     semester_id: "",
-  })
-
-  // Verificar autenticación
-  useEffect(() => {
-    if (!token) {
-      setAuthError("No estás autenticado. Redirigiendo al login...")
-      router.push("/login")
-      return
-    }
-
-    const verifyUser = async () => {
-      try {
-        const response = await api.get("/user")
-        const { role, name, email } = response.data.data
-        if (role !== "admin") {
-          setAuthError("Acceso denegado. Redirigiendo al login...")
-          localStorage.removeItem("token")
-          router.push("/login")
-          return
-        }
-        setUserName(name || "Admin Sistema")
-        setUserEmail(email || "admin@mentora.edu")
-        setLoadingAuth(false)
-      } catch (err) {
-        setAuthError("Token inválido. Redirigiendo al login...")
-        localStorage.removeItem("token")
-        router.push("/login")
-      }
-    }
-
-    verifyUser()
-  }, [token, router])
+  });
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Cargar datos
   useEffect(() => {
-    const fetchData = async () => {
-      if (loadingAuth || authError) return
+    if (loadingAuth || authError) return;
 
+    const fetchCourses = async () => {
       try {
-        setLoading(true)
-        const [coursesRes, signaturesRes, professorsRes, semestersRes] = await Promise.all([
-          api.get("/courses"),
-          api.get("/signatures"),
-          api.get("/users?role=professor"),
-          api.get("/semesters"),
-        ])
-
-        console.log("Courses response:", coursesRes.data)
-        console.log("Signatures response:", signaturesRes.data)
-        console.log("Professors response:", professorsRes.data)
-        console.log("Semesters response:", semestersRes.data)
-
-        setCourses(coursesRes.data.data || [])
-        setSignatures(signaturesRes.data.data || [])
-        setProfessors(professorsRes.data.data || [])
-        setSemesters(semestersRes.data.data || [])
+        setLoadingCourses(true);
+        const response = await api.get("/courses");
+        setCourses(response.data.data || []);
+        setErrorCourses(null);
       } catch (err: unknown) {
-        const error = err as AxiosError<ApiErrorResponse>
-        console.error("API error:", error.response?.data || error.message)
-        setError(error.response?.data?.message || "Error al cargar los datos. Inténtalo de nuevo.")
+        const error = err as AxiosError<ApiErrorResponse>;
+        setErrorCourses(error.response?.data?.message || "Error al cargar los cursos.");
       } finally {
-        setLoading(false)
+        setLoadingCourses(false);
       }
-    }
+    };
 
-    fetchData()
-  }, [loadingAuth, authError])
+    const fetchSignatures = async () => {
+      try {
+        setLoadingSignatures(true);
+        const response = await api.get("/signatures");
+        setSignatures(response.data.data || []);
+        setErrorSignatures(null);
+      } catch (err: unknown) {
+        const error = err as AxiosError<ApiErrorResponse>;
+        setErrorSignatures(error.response?.data?.message || "Error al cargar las asignaturas.");
+      } finally {
+        setLoadingSignatures(false);
+      }
+    };
+
+    const fetchProfessors = async () => {
+      try {
+        setLoadingProfessors(true);
+        const response = await api.get("/users?role=professor");
+        setProfessors(response.data.data || []);
+        setErrorProfessors(null);
+      } catch (err: unknown) {
+        const error = err as AxiosError<ApiErrorResponse>;
+        setErrorProfessors(error.response?.data?.message || "Error al cargar los profesores.");
+      } finally {
+        setLoadingProfessors(false);
+      }
+    };
+
+    const fetchSemesters = async () => {
+      try {
+        setLoadingSemesters(true);
+        const response = await api.get("/semesters");
+        setSemesters(response.data.data || []);
+        setErrorSemesters(null);
+      } catch (err: unknown) {
+        const error = err as AxiosError<ApiErrorResponse>;
+        setErrorSemesters(error.response?.data?.message || "Error al cargar los semestres.");
+      } finally {
+        setLoadingSemesters(false);
+      }
+    };
+
+    fetchCourses();
+    fetchSignatures();
+    fetchProfessors();
+    fetchSemesters();
+  }, [loadingAuth, authError]);
+
+  // Validar ponderaciones
+  const validateWeighting = () => {
+    const { homework, midterms, final_exam } = courseFormData.weighting;
+    const total = parseFloat(homework) + parseFloat(midterms) + parseFloat(final_exam);
+    if (Math.abs(total - 1.0) > 0.01) {
+      setFormError("Las ponderaciones deben sumar exactamente 1.0");
+      return false;
+    }
+    setFormError(null);
+    return true;
+  };
 
   // Manejar creación de curso
   const handleCreateCourse = async () => {
+    if (!validateWeighting()) return;
     try {
+      const schedule = courseFormData.scheduleDay && courseFormData.scheduleStartTime && courseFormData.scheduleEndTime
+        ? [{
+            day: courseFormData.scheduleDay,
+            start_time: courseFormData.scheduleStartTime,
+            end_time: courseFormData.scheduleEndTime,
+          }]
+        : null;
       await api.post("/courses", {
         code: courseFormData.code,
-        schedule: courseFormData.schedule ? [courseFormData.schedule] : null,
+        schedule,
         weighting: {
           homework: parseFloat(courseFormData.weighting.homework),
           midterms: parseFloat(courseFormData.weighting.midterms),
@@ -164,31 +187,40 @@ export default function AdminCoursesPage() {
         },
         signature_id: courseFormData.signature_id,
         semester_id: courseFormData.semester_id,
-      })
-      setIsCreateDialogOpen(false)
+      });
+      setIsCreateDialogOpen(false);
       setCourseFormData({
         code: "",
-        schedule: "",
+        scheduleDay: "",
+        scheduleStartTime: "",
+        scheduleEndTime: "",
         weighting: { homework: "0.3", midterms: "0.4", final_exam: "0.3" },
         signature_id: "",
         semester_id: "",
-      })
-      const response = await api.get("/courses")
-      setCourses(response.data.data || [])
-      setError(null)
+      });
+      const response = await api.get("/courses");
+      setCourses(response.data.data || []);
+      setErrorCourses(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      setError(error.response?.data?.message || "Error al crear el curso. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      setErrorCourses(error.response?.data?.message || "Error al crear el curso. Inténtalo de nuevo.");
     }
-  }
+  };
 
   // Manejar edición de curso
   const handleEditCourse = async () => {
-    if (!selectedCourse) return
+    if (!selectedCourse || !validateWeighting()) return;
     try {
+      const schedule = courseFormData.scheduleDay && courseFormData.scheduleStartTime && courseFormData.scheduleEndTime
+        ? [{
+            day: courseFormData.scheduleDay,
+            start_time: courseFormData.scheduleStartTime,
+            end_time: courseFormData.scheduleEndTime,
+          }]
+        : null;
       await api.put(`/courses/${selectedCourse.id}`, {
         code: courseFormData.code,
-        schedule: courseFormData.schedule ? [courseFormData.schedule] : null,
+        schedule,
         weighting: {
           homework: parseFloat(courseFormData.weighting.homework),
           midterms: parseFloat(courseFormData.weighting.midterms),
@@ -196,54 +228,58 @@ export default function AdminCoursesPage() {
         },
         signature_id: courseFormData.signature_id,
         semester_id: courseFormData.semester_id,
-      })
-      setIsEditDialogOpen(false)
+      });
+      setIsEditDialogOpen(false);
       setCourseFormData({
         code: "",
-        schedule: "",
+        scheduleDay: "",
+        scheduleStartTime: "",
+        scheduleEndTime: "",
         weighting: { homework: "0.3", midterms: "0.4", final_exam: "0.3" },
         signature_id: "",
         semester_id: "",
-      })
-      setSelectedCourse(null)
-      const response = await api.get("/courses")
-      setCourses(response.data.data || [])
-      setError(null)
+      });
+      setSelectedCourse(null);
+      const response = await api.get("/courses");
+      setCourses(response.data.data || []);
+      setErrorCourses(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      setError(error.response?.data?.message || "Error al editar el curso. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      setErrorCourses(error.response?.data?.message || "Error al editar el curso. Inténtalo de nuevo.");
     }
-  }
+  };
 
   // Manejar eliminación de curso
   const handleDeleteCourse = async (id: string) => {
     try {
-      await api.delete(`/courses/${id}`)
-      const response = await api.get("/courses")
-      setCourses(response.data.data || [])
-      setError(null)
+      await api.delete(`/courses/${id}`);
+      const response = await api.get("/courses");
+      setCourses(response.data.data || []);
+      setErrorCourses(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      setError(error.response?.data?.message || "Error al eliminar el curso. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      setErrorCourses(error.response?.data?.message || "Error al eliminar el curso. Inténtalo de nuevo.");
     }
-  }
+  };
 
   // Manejar clic en ver detalles
   const handleViewDetails = (courseId: string) => {
-    router.push(`/admin/courses/${courseId}`)
-  }
+    router.push(`/admin/courses/${courseId}`);
+  };
 
   // Manejar clic en ver estudiantes
   const handleViewStudents = (courseId: string) => {
-    router.push(`/admin/courses/${courseId}/students`)
-  }
+    router.push(`/admin/courses/${courseId}/students`);
+  };
 
   // Manejar clic en editar
   const handleEditClick = (course: Course) => {
-    setSelectedCourse(course)
+    setSelectedCourse(course);
     setCourseFormData({
       code: course.code || "",
-      schedule: formatFirstScheduleItem(course.schedule),
+      scheduleDay: course.schedule && course.schedule[0] ? course.schedule[0].day : "",
+      scheduleStartTime: course.schedule && course.schedule[0] ? course.schedule[0].start_time : "",
+      scheduleEndTime: course.schedule && course.schedule[0] ? course.schedule[0].end_time : "",
       weighting: {
         homework: course.weighting?.homework?.toString() || "0.3",
         midterms: course.weighting?.midterms?.toString() || "0.4",
@@ -251,60 +287,69 @@ export default function AdminCoursesPage() {
       },
       signature_id: course.signature ? signatures.find((s) => s.name === course.signature)?.id || "" : "",
       semester_id: course.semester ? semesters.find((s) => s.name === course.semester)?.id || "" : "",
-    })
-    setIsEditDialogOpen(true)
-  }
-
-  // Formatear el primer elemento del horario para el formulario
-  const formatFirstScheduleItem = (schedule: Course['schedule']): string => {
-    if (!schedule || !Array.isArray(schedule) || schedule.length === 0) return ""
-    const firstItem = schedule[0]
-    if (typeof firstItem === "string") return firstItem
-    if (typeof firstItem === "object" && firstItem.day && firstItem.time) return `${firstItem.day} ${firstItem.time}`
-    return ""
-  }
+    });
+    setIsEditDialogOpen(true);
+  };
 
   // Formatear horario para la tabla
   const formatSchedule = (schedule: Course['schedule']): string => {
-    if (!schedule || !Array.isArray(schedule)) return "Sin horario"
+    if (!schedule || !Array.isArray(schedule)) return "Sin horario";
     return schedule
       .map((item) => {
-        if (typeof item === "string") return item
-        if (typeof item === "object" && item.day && item.time) return `${item.day} ${item.time}`
-        return ""
+        if (item.day && item.start_time && item.end_time) {
+          return `${item.day} ${item.start_time}-${item.end_time}`;
+        }
+        return "";
       })
       .filter((item) => item)
-      .join(", ") || "Sin horario"
-  }
+      .join(", ") || "Sin horario";
+  };
 
   // Filtrar cursos
   const filteredCourses = courses.filter((course) => {
     const matchesSearch =
       (course.code || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (course.signature || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (course.professor || "").toLowerCase().includes(searchTerm.toLowerCase())
+      (course.professor || "").toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSubject =
       selectedSubject === "all" ||
-      signatures.find((s) => s.id === selectedSubject)?.name === course.signature
+      signatures.find((s) => s.id === selectedSubject)?.name === course.signature;
     const matchesSemester =
       selectedSemester === "all" ||
-      semesters.find((s) => s.id === selectedSemester)?.name === course.semester
-    const matchesStatus = showInactive || course.status === "active"
+      semesters.find((s) => s.id === selectedSemester)?.name === course.semester;
+    const matchesStatus = showInactive || course.status === "active";
 
-    return matchesSearch && matchesSubject && matchesSemester && matchesStatus
-  })
+    return matchesSearch && matchesSubject && matchesSemester && matchesStatus;
+  });
+
+  // Ajustar la URL de la foto de perfil
+  const profilePhotoUrl = user?.profilePhotoUrl
+    ? user.profilePhotoUrl.startsWith('http')
+      ? user.profilePhotoUrl
+      : `http://localhost:80${user.profilePhotoUrl}`
+    : null;
+
+  const isLoading = loadingCourses || loadingSignatures || loadingProfessors || loadingSemesters;
+  const hasError = errorCourses || errorSignatures || errorProfessors || errorSemesters;
 
   return (
-    <MainLayout userRole="admin" userName={userName} userEmail={userEmail}>
+    <MainLayout
+      userRole={user?.role || "admin"}
+      userName={user?.name || "Cargando..."}
+      userEmail={user?.email || "cargando@mentora.edu"}
+      profilePhotoUrl={profilePhotoUrl}
+    >
       <div className="flex flex-col gap-6 p-4">
         {loadingAuth ? (
-          <div className="text-center">Verificando autenticación...</div>
+          <div className="text-center animate-pulse">Verificando autenticación...</div>
         ) : authError ? (
           <div className="text-red-500 text-center">{authError}</div>
-        ) : loading ? (
-          <div className="text-center">Cargando...</div>
-        ) : error ? (
-          <div className="text-red-500 text-center">{error}</div>
+        ) : isLoading ? (
+          <div className="text-center animate-pulse">Cargando datos...</div>
+        ) : hasError ? (
+          <div className="text-red-500 text-center">
+            {errorCourses || errorSignatures || errorProfessors || errorSemesters}
+          </div>
         ) : (
           <>
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -335,13 +380,36 @@ export default function AdminCoursesPage() {
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="schedule">Horario</Label>
-                      <Input
-                        id="schedule"
-                        placeholder="Ej: Lunes y Miércoles 10:00 - 12:00"
-                        value={courseFormData.schedule}
-                        onChange={(e) => setCourseFormData({ ...courseFormData, schedule: e.target.value })}
-                      />
+                      <Label>Horario</Label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <Label htmlFor="schedule-day">Día</Label>
+                          <Input
+                            id="schedule-day"
+                            placeholder="Ej: Lunes"
+                            value={courseFormData.scheduleDay}
+                            onChange={(e) => setCourseFormData({ ...courseFormData, scheduleDay: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="schedule-start-time">Inicio</Label>
+                          <Input
+                            id="schedule-start-time"
+                            type="time"
+                            value={courseFormData.scheduleStartTime}
+                            onChange={(e) => setCourseFormData({ ...courseFormData, scheduleStartTime: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="schedule-end-time">Fin</Label>
+                          <Input
+                            id="schedule-end-time"
+                            type="time"
+                            value={courseFormData.scheduleEndTime}
+                            onChange={(e) => setCourseFormData({ ...courseFormData, scheduleEndTime: e.target.value })}
+                          />
+                        </div>
+                      </div>
                     </div>
                     <div className="grid gap-2">
                       <Label>Ponderación</Label>
@@ -398,6 +466,7 @@ export default function AdminCoursesPage() {
                           />
                         </div>
                       </div>
+                      {formError && <div className="text-red-500 text-sm">{formError}</div>}
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="subject">Asignatura</Label>
@@ -602,13 +671,36 @@ export default function AdminCoursesPage() {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-schedule">Horario</Label>
-                    <Input
-                      id="edit-schedule"
-                      placeholder="Ej: Lunes y Miércoles 10:00 - 12:00"
-                      value={courseFormData.schedule}
-                      onChange={(e) => setCourseFormData({ ...courseFormData, schedule: e.target.value })}
-                    />
+                    <Label>Horario</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <Label htmlFor="edit-schedule-day">Día</Label>
+                        <Input
+                          id="edit-schedule-day"
+                          placeholder="Ej: Lunes"
+                          value={courseFormData.scheduleDay}
+                          onChange={(e) => setCourseFormData({ ...courseFormData, scheduleDay: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-schedule-start-time">Inicio</Label>
+                        <Input
+                          id="edit-schedule-start-time"
+                          type="time"
+                          value={courseFormData.scheduleStartTime}
+                          onChange={(e) => setCourseFormData({ ...courseFormData, scheduleStartTime: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-schedule-end-time">Fin</Label>
+                        <Input
+                          id="edit-schedule-end-time"
+                          type="time"
+                          value={courseFormData.scheduleEndTime}
+                          onChange={(e) => setCourseFormData({ ...courseFormData, scheduleEndTime: e.target.value })}
+                        />
+                      </div>
+                    </div>
                   </div>
                   <div className="grid gap-2">
                     <Label>Ponderación</Label>
@@ -665,6 +757,7 @@ export default function AdminCoursesPage() {
                         />
                       </div>
                     </div>
+                    {formError && <div className="text-red-500 text-sm">{formError}</div>}
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="edit-subject">Asignatura</Label>
@@ -711,5 +804,5 @@ export default function AdminCoursesPage() {
         )}
       </div>
     </MainLayout>
-  )
+  );
 }

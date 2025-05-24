@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useState, useEffect } from "react"
-import { usePathname, useRouter } from "next/navigation"
+import type React from "react";
+import { useState, useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Book,
   ChevronDown,
@@ -15,7 +15,7 @@ import {
   Sun,
   Users,
   Calendar,
-} from "lucide-react"
+} from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -29,9 +29,9 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
-} from "@/components/ui/sidebar"
-import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+} from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,29 +39,29 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { useTheme } from "next-themes"
+} from "@/components/ui/dropdown-menu";
+import { useTheme } from "next-themes";
 
 interface MainLayoutProps {
-  children: React.ReactNode
-  userRole: "student" | "professor" | "admin"
-  userName: string
-  userEmail: string
-  profilePhotoUrl?: string | null
+  children: React.ReactNode;
+  userRole: "student" | "professor" | "admin";
+  userName: string;
+  userEmail: string;
+  profilePhotoUrl?: string | null;
 }
 
 export default function MainLayout({ children, userRole, userName, userEmail, profilePhotoUrl }: MainLayoutProps) {
-  const pathname = usePathname()
-  const { theme, setTheme } = useTheme()
-  const [open, setOpen] = useState(true)
-  const router = useRouter()
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
+  const pathname = usePathname();
+  const { theme, setTheme } = useTheme();
+  const [open, setOpen] = useState(true);
+  const router = useRouter();
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
   useEffect(() => {
     if (!token) {
-      router.push("/login")
+      router.push("/login");
     }
-  }, [token, router])
+  }, [token, router]);
 
   const getInitials = (name: string) => {
     return name
@@ -69,21 +69,22 @@ export default function MainLayout({ children, userRole, userName, userEmail, pr
       .map((part) => part[0])
       .join("")
       .toUpperCase()
-  }
+      .slice(0, 2);
+  };
 
   const studentNavItems = [
     { title: "Dashboard", icon: Home, href: "/student" },
     { title: "Cursos", icon: Book, href: "/student/courses" },
     { title: "Notas", icon: FileText, href: "/student/grades" },
     { title: "Contenidos", icon: GraduationCap, href: "/student/contents" },
-  ]
+  ];
 
   const teacherNavItems = [
     { title: "Dashboard", icon: Home, href: "/professor" },
     { title: "Cursos", icon: Book, href: "/professor/courses" },
     { title: "Matrículas", icon: Users, href: "/professor/enrollments" },
     { title: "Contenidos", icon: GraduationCap, href: "/professor/contents" },
-  ]
+  ];
 
   const adminNavItems = [
     { title: "Dashboard", icon: Home, href: "/admin" },
@@ -94,14 +95,13 @@ export default function MainLayout({ children, userRole, userName, userEmail, pr
     { title: "Matrículas", icon: FileText, href: "/admin/enrollments" },
     { title: "Notas", icon: FileText, href: "/admin/grades" },
     { title: "Contenidos", icon: FileText, href: "/admin/contents" },
-  ]
+  ];
 
-  const navItems = userRole === "student" ? studentNavItems : userRole === "professor" ? teacherNavItems : adminNavItems
+  const navItems = userRole === "student" ? studentNavItems : userRole === "professor" ? teacherNavItems : adminNavItems;
 
-  // Función para redirigir a la página de perfil unificada
   const handleSettingsClick = () => {
-    router.push("/profile")
-  }
+    router.push("/profile");
+  };
 
   return (
     <SidebarProvider defaultOpen={true} open={open} onOpenChange={setOpen}>
@@ -137,11 +137,19 @@ export default function MainLayout({ children, userRole, userName, userEmail, pr
           <SidebarFooter className="border-t border-gray-200 dark:border-gray-800 p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Avatar>
+                <Avatar className="h-10 w-10">
                   {profilePhotoUrl ? (
-                    <AvatarImage src={profilePhotoUrl} alt={`${userName}'s profile photo`} />
+                    <AvatarImage
+                      src={profilePhotoUrl}
+                      alt={`${userName}'s profile photo`}
+                      width={40}
+                      height={40}
+                      className="object-cover"
+                    />
                   ) : (
-                    <AvatarFallback>{getInitials(userName)}</AvatarFallback>
+                    <AvatarFallback className="bg-gray-300 text-gray-600">
+                      {getInitials(userName)}
+                    </AvatarFallback>
                   )}
                 </Avatar>
                 <div className="space-y-0.5">
@@ -169,8 +177,8 @@ export default function MainLayout({ children, userRole, userName, userEmail, pr
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={() => {
-                      localStorage.removeItem("token")
-                      router.push("/login")
+                      localStorage.removeItem("token");
+                      router.push("/login");
                     }}
                   >
                     <LogOut className="mr-2 h-4 w-4" />
@@ -198,9 +206,17 @@ export default function MainLayout({ children, userRole, userName, userEmail, pr
                 <Button variant="ghost" size="icon" className="rounded-full">
                   <Avatar className="h-8 w-8">
                     {profilePhotoUrl ? (
-                      <AvatarImage src={profilePhotoUrl} alt={`${userName}'s profile photo`} />
+                      <AvatarImage
+                        src={profilePhotoUrl}
+                        alt={`${userName}'s profile photo`}
+                        width={32}
+                        height={32}
+                        className="object-cover"
+                      />
                     ) : (
-                      <AvatarFallback>{getInitials(userName)}</AvatarFallback>
+                      <AvatarFallback className="bg-gray-300 text-gray-600">
+                        {getInitials(userName)}
+                      </AvatarFallback>
                     )}
                   </Avatar>
                 </Button>
@@ -219,8 +235,8 @@ export default function MainLayout({ children, userRole, userName, userEmail, pr
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => {
-                    localStorage.removeItem("token")
-                    router.push("/login")
+                    localStorage.removeItem("token");
+                    router.push("/login");
                   }}
                 >
                   <LogOut className="mr-2 h-4 w-4" />
@@ -239,5 +255,5 @@ export default function MainLayout({ children, userRole, userName, userEmail, pr
         </div>
       </div>
     </SidebarProvider>
-  )
+  );
 }
