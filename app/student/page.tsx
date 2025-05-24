@@ -161,7 +161,10 @@ export default function StudentDashboard() {
       'from-indigo-500 to-indigo-700',
     ];
 
-    return courses.map((course, index) => {
+    // Filtrar solo los cursos activos
+    const activeCourses = courses.filter(course => course.status === "active");
+
+    return activeCourses.map((course, index) => {
       console.log("Course schedule:", course.schedule); // Debug log
       const courseGrades = grades.filter(grade => grade.course_name === course.signature);
       const validGrades = courseGrades.filter(grade => grade.grade_value != null);
@@ -182,7 +185,7 @@ export default function StudentDashboard() {
 
       const nextClass = course.schedule && Array.isArray(course.schedule) && course.schedule.length > 0
         ? course.schedule
-            .filter(slot => slot.day && slot.start_time && slot.end_time) // Filtra slots válidos
+            .filter(slot => slot.day && slot.start_time && slot.end_time)
             .map(slot => `${slot.day} ${slot.start_time}-${slot.end_time}`)
             .join(', ') || "Sin horario"
         : "Sin horario";
@@ -202,6 +205,9 @@ export default function StudentDashboard() {
   }, [user?.id]);
 
   const computeUpcomingEvents = useCallback((grades: Grade[], contents: Content[], courses: Course[], assignments: Assignment[]) => {
+    // Filtrar cursos activos para eventos
+    const activeCourses = courses.filter(course => course.status === "active");
+    
     const events = [
       ...grades
         .filter(grade => new Date(grade.grade_date) > new Date())
@@ -217,10 +223,10 @@ export default function StudentDashboard() {
           const createdAt = new Date(content.created_at);
           const oneWeekAgo = new Date();
           oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-          return createdAt >= oneWeekAgo;
+          return createdAt >= oneWeekAgo && activeCourses.some(course => course.id === content.course_id);
         })
         .map(content => {
-          const course = courses.find(course => course.id === content.course_id);
+          const course = activeCourses.find(course => course.id === content.course_id);
           return {
             id: content.id,
             title: content.name,
@@ -232,10 +238,11 @@ export default function StudentDashboard() {
       ...assignments
         .filter(assignment => 
           new Date(assignment.due_date) > new Date() &&
-          !assignment.submissions_files.some(submission => submission.student_id === user?.id)
+          !assignment.submissions_files.some(submission => submission.student_id === user?.id) &&
+          activeCourses.some(course => course.id === assignment.course_id)
         )
         .map(assignment => {
-          const course = courses.find(course => course.id === assignment.course_id);
+          const course = activeCourses.find(course => course.id === assignment.course_id);
           return {
             id: assignment.id,
             title: assignment.title,
@@ -358,64 +365,72 @@ export default function StudentDashboard() {
 
               <TabsContent value="courses" className="space-y-4">
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {activeCourses.map((course) => (
-                    <Link href={`/student/courses/${course.id}`} key={course.id} className="block">
-                      <Card className="h-full overflow-hidden transition-all hover:shadow-md">
-                        <div className={`aspect-video w-full bg-gradient-to-r ${course.gradient} flex items-center justify-center transition-all hover:scale-105`}>
-                          <Book className="h-16 w-16 text-white opacity-80" />
-                        </div>
-                        <CardHeader className="p-4">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <CardTitle className="text-lg">{course.title}</CardTitle>
-                              <CardDescription>{course.code}</CardDescription>
-                            </div>
-                            {(course.pendingTasks > 0 || course.newMaterials > 0) && (
-                              <div className="flex flex-col gap-1">
-                                {course.pendingTasks > 0 && (
-                                  <Badge variant="destructive" className="text-xs">
-                                    {course.pendingTasks} {course.pendingTasks === 1 ? "tarea" : "tareas"}
-                                  </Badge>
-                                )}
-                                {course.newMaterials > 0 && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    {course.newMaterials} {course.newMaterials === 1 ? "nuevo" : "nuevos"}
-                                  </Badge>
-                                )}
+                  {activeCourses.length > 0 ? (
+                    activeCourses.map((course) => (
+                      <Link href={`/student/courses/${course.id}`} key={course.id} className="block">
+                        <Card className="h-full overflow-hidden transition-all hover:shadow-md">
+                          <div className={`aspect-video w-full bg-gradient-to-r ${course.gradient} flex items-center justify-center transition-all hover:scale-105`}>
+                            <Book className="h-16 w-16 text-white opacity-80" />
+                          </div>
+                          <CardHeader className="p-4">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <CardTitle className="text-lg">{course.title}</CardTitle>
+                                <CardDescription>{course.code}</CardDescription>
                               </div>
-                            )}
-                          </div>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-0 space-y-3">
-                          <div className="text-sm text-muted-foreground">{course.professor}</div>
-                          <div className="flex items-center text-sm">
-                            <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
-                            <span>{course.nextClass}</span>
-                          </div>
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                              <span>Progreso</span>
-                              <span className="font-medium">{course.progress}%</span>
+                              {(course.pendingTasks > 0 || course.newMaterials > 0) && (
+                                <div className="flex flex-col gap-1">
+                                  {course.pendingTasks > 0 && (
+                                    <Badge variant="destructive" className="text-xs">
+                                      {course.pendingTasks} {course.pendingTasks === 1 ? "tarea" : "tareas"}
+                                    </Badge>
+                                  )}
+                                  {course.newMaterials > 0 && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      {course.newMaterials} {course.newMaterials === 1 ? "nuevo" : "nuevos"}
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                            <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-800">
-                              <div
-                                className={`h-full rounded-full ${
-                                  course.progress >= 75
-                                    ? "bg-green-500"
-                                    : course.progress >= 50
-                                      ? "bg-blue-500"
-                                      : course.progress >= 25
-                                        ? "bg-yellow-500"
-                                        : "bg-red-500"
-                                }`}
-                                style={{ width: `${course.progress}%` }}
-                              />
+                          </CardHeader>
+                          <CardContent className="p-4 pt-0 space-y-3">
+                            <div className="text-sm text-muted-foreground">{course.professor}</div>
+                            <div className="flex items-center text-sm">
+                              <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
+                              <span>{course.nextClass}</span>
                             </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </Link>
-                  ))}
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between text-sm">
+                                <span>Progreso</span>
+                                <span className="font-medium">{course.progress}%</span>
+                              </div>
+                              <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-800">
+                                <div
+                                  className={`h-full rounded-full ${
+                                    course.progress >= 75
+                                      ? "bg-green-500"
+                                      : course.progress >= 50
+                                        ? "bg-blue-500"
+                                        : course.progress >= 25
+                                          ? "bg-yellow-500"
+                                          : "bg-red-500"
+                                  }`}
+                                  style={{ width: `${course.progress}%` }}
+                                />
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Link>
+                    ))
+                  ) : (
+                    <Card>
+                      <CardContent className="pt-6">
+                        <p className="text-muted-foreground">No tienes cursos activos.</p>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               </TabsContent>
 
