@@ -1,16 +1,17 @@
-"use client"
+"use client";
 
-import { useState, useEffect, ChangeEvent } from "react"
-import api from "@/lib/api"
-import MainLayout from "@/components/layout/main-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { useState, useEffect, ChangeEvent } from "react";
+import { useRouter } from "next/navigation";
+import api from "@/lib/api";
+import MainLayout from "@/components/layout/main-layout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   Book,
   Calendar,
@@ -26,216 +27,159 @@ import {
   FileImage,
   File as FilePdf,
   FileSpreadsheet,
-} from "lucide-react"
-import { useRouter } from "next/navigation"
-import { AxiosError } from "axios"
+  AlertCircle,
+} from "lucide-react";
+import { AxiosError } from "axios";
+import useAuth from "@/hooks/useAuth";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface Content {
-  id: string
-  name: string
-  description: string
-  bibliography?: string
-  order: number
-  file_path?: string
-  type: string
-  format: string
-  size: number
-  views: number
-  downloads: number
-  duration?: string
-  course_id: string
-  course: string
-  created_at: string
-  updated_at: string
-}
-
-interface Media {
-  id: string
-  file_name: string
-  url: string
-  mime_type: string
-  size: number
-  created_at: string
-  updated_at: string
+  id: string;
+  name: string;
+  description: string;
+  bibliography?: string;
+  order: number;
+  file_path?: string;
+  type: "document" | "presentation" | "video" | "code" | "spreadsheet";
+  format: "pdf" | "doc" | "docx" | "pptx" | "mp4";
+  size: number;
+  views: number;
+  downloads: number;
+  duration?: string;
+  course_id: string;
+  course: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface Assignment {
-  id: string
-  title: string
-  description: string
-  course_id: string
-  course: string | { id: string; name: string; syllabus?: string; syllabus_pdf?: string; professor_id?: string; created_at?: string; updated_at?: string; media?: Media[] }
-  due_date: string
-  submissions: number
-  total_students: number
-  submissions_files: { id: string; file_name: string; url: string; size: number; student_id: string; student_name: string; created_at: string }[]
-  created_at: string
-  updated_at: string
+  id: string;
+  title: string;
+  description: string;
+  course_id: string;
+  course: string;
+  due_date: string;
+  submissions: number;
+  total_students: number;
+  submissions_files: { id: string; file_name: string; url: string; size: number; student_id: string; student_name: string; created_at: string }[];
+  created_at: string;
+  updated_at: string;
 }
 
 interface Grade {
-  id: string
-  title: string
-  grade_type: string
-  grade_value: number | null
-  grade_date: string
-  enrollment_id: string
-  assignment_id: string
-  course_name: string
+  id: string;
+  title: string;
+  grade_type: string;
+  grade_value: number | null;
+  grade_date: string;
+  enrollment_id: string;
+  assignment_id: string;
+  course_name: string;
 }
 
 interface Course {
-  id: string
-  signature: string
+  id: string;
+  signature: { name: string } | string;
 }
 
 interface ApiErrorResponse {
-  message: string
+  message?: string;
+  data?: string;
+  errors?: { [key: string]: string[] };
 }
 
 export default function AdminContentsPage() {
-  const router = useRouter()
-  const [token, setToken] = useState<string | null>(
-    typeof window !== "undefined" ? localStorage.getItem("token") : null
-  )
-  const [loadingAuth, setLoadingAuth] = useState(true)
-  const [authError, setAuthError] = useState<string | null>(null)
-  const [contents, setContents] = useState<Content[]>([])
-  const [assignments, setAssignments] = useState<Assignment[]>([])
-  const [courses, setCourses] = useState<Course[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [userName, setUserName] = useState("Cargando...")
-  const [userEmail, setUserEmail] = useState("cargando@mentora.edu")
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedCourse, setSelectedCourse] = useState("all")
-  const [isCreateContentDialogOpen, setIsCreateContentDialogOpen] = useState(false)
-  const [isCreateAssignmentDialogOpen, setIsCreateAssignmentDialogOpen] = useState(false)
-  const [isEditContentDialogOpen, setIsEditContentDialogOpen] = useState(false)
-  const [isEditAssignmentDialogOpen, setIsEditAssignmentDialogOpen] = useState(false)
-  const [isViewSubmissionsDialogOpen, setIsViewSubmissionsDialogOpen] = useState(false)
-  const [selectedContent, setSelectedContent] = useState<Content | null>(null)
-  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null)
-  const [submissionGrade, setSubmissionGrade] = useState<{ [key: string]: string }>({})
-  const [submissionGrades, setSubmissionGrades] = useState<{ [key: string]: Grade | null }>({})
+  const router = useRouter();
+  const { user, loading: loadingAuth, error: authError } = useAuth("admin");
+  const [contents, setContents] = useState<Content[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCourse, setSelectedCourse] = useState("all");
+  const [isCreateContentDialogOpen, setIsCreateContentDialogOpen] = useState(false);
+  const [isCreateAssignmentDialogOpen, setIsCreateAssignmentDialogOpen] = useState(false);
+  const [isEditContentDialogOpen, setIsEditContentDialogOpen] = useState(false);
+  const [isEditAssignmentDialogOpen, setIsEditAssignmentDialogOpen] = useState(false);
+  const [isViewSubmissionsDialogOpen, setIsViewSubmissionsDialogOpen] = useState(false);
+  const [selectedContent, setSelectedContent] = useState<Content | null>(null);
+  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
+  const [submissionGrade, setSubmissionGrade] = useState<{ [key: string]: string }>({});
+  const [submissionGrades, setSubmissionGrades] = useState<{ [key: string]: Grade | null }>({});
 
   const [contentFormData, setContentFormData] = useState({
     name: "",
     description: "",
     bibliography: "",
     order: "1",
-    type: "document",
-    format: "pdf",
+    type: "document" as Content["type"],
+    format: "pdf" as Content["format"],
     file: null as File | null,
     course_id: "",
-  })
+  });
 
   const [assignmentFormData, setAssignmentFormData] = useState({
     title: "",
     description: "",
     course_id: "",
     due_date: "",
-  })
+  });
 
-  // Función auxiliar para obtener el nombre del curso en Assignment
   const getAssignmentCourseName = (assignment: Assignment): string => {
-    if (!assignment || !assignment.course) {
-      return "Curso sin nombre"
-    }
-    if (typeof assignment.course === "string") {
-      return assignment.course
-    }
-    if (typeof assignment.course === "object" && assignment.course.name) {
-      return assignment.course.name
-    }
-    return "Curso sin nombre"
-  }
+    return assignment.course || "Curso sin nombre";
+  };
 
-  // Función auxiliar para obtener el nombre del curso en Course
   const getCourseName = (course: Course): string => {
-    if (!course || !course.signature) {
-      return "Curso sin nombre"
-    }
-    if (typeof course.signature !== "string") {
-      return "Curso sin nombre"
-    }
-    return course.signature
-  }
+    return typeof course.signature === "string" ? course.signature : course.signature?.name || "Curso sin nombre";
+  };
 
   useEffect(() => {
-    if (!token) {
-      setAuthError("No estás autenticado. Redirigiendo al login...")
-      router.push("/login")
-      return
-    }
+    if (loadingAuth || authError) return;
 
-    const verifyUser = async () => {
-      try {
-        const response = await api.get("/user")
-        const { role, name, email } = response.data.data
-        if (role !== "admin") {
-          setAuthError("Acceso denegado. Redirigiendo al login...")
-          localStorage.removeItem("token")
-          router.push("/login")
-          return
-        }
-        setUserName(name || "Admin Sistema")
-        setUserEmail(email || "admin@mentora.edu")
-        setLoadingAuth(false)
-      } catch (err) {
-        setAuthError("Token inválido. Redirigiendo al login...")
-        localStorage.removeItem("token")
-        router.push("/login")
-      }
-    }
-
-    verifyUser()
-  }, [token, router])
-
-  useEffect(() => {
     const fetchData = async () => {
-      if (loadingAuth || authError) return
-
       try {
-        setLoading(true)
+        setLoading(true);
         const [contentsRes, assignmentsRes, coursesRes] = await Promise.all([
           api.get("/contents"),
           api.get("/assignments"),
           api.get("/courses"),
-        ])
-
-        setContents(contentsRes.data.data || [])
-        setAssignments(assignmentsRes.data.data || [])
-        setCourses(coursesRes.data.data || [])
+        ]);
+        setContents(contentsRes.data.data || []);
+        setAssignments(assignmentsRes.data.data || []);
+        setCourses(coursesRes.data.data || []);
+        if (!coursesRes.data.data.length) {
+          setApiError("No se pudieron cargar los cursos. Inténtalo de nuevo.");
+        }
       } catch (err: unknown) {
-        const error = err as AxiosError<ApiErrorResponse>
-        setError(error.response?.data?.message || "Error al cargar los datos. Inténtalo de nuevo.")
+        const error = err as AxiosError<ApiErrorResponse>;
+        setApiError(error.response?.data?.message || error.response?.data?.data || "Error al cargar los datos. Inténtalo de nuevo.");
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    fetchData()
-  }, [loadingAuth, authError])
+    fetchData();
+  }, [loadingAuth, authError]);
 
   const handleCreateContent = async () => {
     try {
-      const formDataToSend = new FormData()
-      formDataToSend.append("name", contentFormData.name)
-      formDataToSend.append("description", contentFormData.description)
-      formDataToSend.append("bibliography", contentFormData.bibliography)
-      formDataToSend.append("order", contentFormData.order)
-      formDataToSend.append("type", contentFormData.type)
-      formDataToSend.append("format", contentFormData.format)
+      const formDataToSend = new FormData();
+      formDataToSend.append("name", contentFormData.name);
+      formDataToSend.append("description", contentFormData.description);
+      formDataToSend.append("bibliography", contentFormData.bibliography);
+      formDataToSend.append("order", contentFormData.order);
+      formDataToSend.append("type", contentFormData.type);
+      formDataToSend.append("format", contentFormData.format);
       if (contentFormData.file) {
-        formDataToSend.append("file", contentFormData.file)
+        formDataToSend.append("file", contentFormData.file);
       }
-      formDataToSend.append("course_id", contentFormData.course_id)
+      formDataToSend.append("course_id", contentFormData.course_id);
 
       await api.post("/contents", formDataToSend, {
         headers: { "Content-Type": "multipart/form-data" },
-      })
-      setIsCreateContentDialogOpen(false)
+      });
+      setIsCreateContentDialogOpen(false);
       setContentFormData({
         name: "",
         description: "",
@@ -245,35 +189,35 @@ export default function AdminContentsPage() {
         format: "pdf",
         file: null,
         course_id: "",
-      })
-      const response = await api.get("/contents")
-      setContents(response.data.data || [])
-      setError(null)
+      });
+      const response = await api.get("/contents");
+      setContents(response.data.data || []);
+      setApiError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      setError(error.response?.data?.message || "Error al crear el contenido. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      setApiError(error.response?.data?.message || error.response?.data?.data || "Error al crear el contenido. Inténtalo de nuevo.");
     }
-  }
+  };
 
   const handleEditContent = async () => {
-    if (!selectedContent) return
+    if (!selectedContent) return;
     try {
-      const formDataToSend = new FormData()
-      formDataToSend.append("name", contentFormData.name)
-      formDataToSend.append("description", contentFormData.description)
-      formDataToSend.append("bibliography", contentFormData.bibliography)
-      formDataToSend.append("order", contentFormData.order)
-      formDataToSend.append("type", contentFormData.type)
-      formDataToSend.append("format", contentFormData.format)
+      const formDataToSend = new FormData();
+      formDataToSend.append("name", contentFormData.name);
+      formDataToSend.append("description", contentFormData.description);
+      formDataToSend.append("bibliography", contentFormData.bibliography);
+      formDataToSend.append("order", contentFormData.order);
+      formDataToSend.append("type", contentFormData.type);
+      formDataToSend.append("format", contentFormData.format);
       if (contentFormData.file) {
-        formDataToSend.append("file", contentFormData.file)
+        formDataToSend.append("file", contentFormData.file);
       }
-      formDataToSend.append("course_id", contentFormData.course_id)
+      formDataToSend.append("course_id", contentFormData.course_id);
 
       await api.put(`/contents/${selectedContent.id}`, formDataToSend, {
         headers: { "Content-Type": "multipart/form-data" },
-      })
-      setIsEditContentDialogOpen(false)
+      });
+      setIsEditContentDialogOpen(false);
       setContentFormData({
         name: "",
         description: "",
@@ -283,114 +227,113 @@ export default function AdminContentsPage() {
         format: "pdf",
         file: null,
         course_id: "",
-      })
-      setSelectedContent(null)
-      const response = await api.get("/contents")
-      setContents(response.data.data || [])
-      setError(null)
+      });
+      setSelectedContent(null);
+      const response = await api.get("/contents");
+      setContents(response.data.data || []);
+      setApiError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      setError(error.response?.data?.message || "Error al editar el contenido. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      setApiError(error.response?.data?.message || error.response?.data?.data || "Error al editar el contenido. Inténtalo de nuevo.");
     }
-  }
+  };
 
   const handleDeleteContent = async (id: string) => {
     try {
-      await api.delete(`/contents/${id}`)
-      const response = await api.get("/contents")
-      setContents(response.data.data || [])
-      setError(null)
+      await api.delete(`/contents/${id}`);
+      const response = await api.get("/contents");
+      setContents(response.data.data || []);
+      setApiError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      setError(error.response?.data?.message || "Error al eliminar el contenido. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      setApiError(error.response?.data?.message || error.response?.data?.data || "Error al eliminar el contenido. Inténtalo de nuevo.");
     }
-  }
+  };
 
   const handleCreateAssignment = async () => {
     try {
-      await api.post("/assignments", assignmentFormData)
-      setIsCreateAssignmentDialogOpen(false)
+      await api.post("/assignments", assignmentFormData);
+      setIsCreateAssignmentDialogOpen(false);
       setAssignmentFormData({
         title: "",
         description: "",
         course_id: "",
         due_date: "",
-      })
-      const response = await api.get("/assignments")
-      setAssignments(response.data.data || [])
-      setError(null)
+      });
+      const response = await api.get("/assignments");
+      setAssignments(response.data.data || []);
+      setApiError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      setError(error.response?.data?.message || "Error al crear la tarea. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      setApiError(error.response?.data?.message || error.response?.data?.data || "Error al crear la tarea. Inténtalo de nuevo.");
     }
-  }
+  };
 
   const handleEditAssignment = async () => {
-    if (!selectedAssignment) return
+    if (!selectedAssignment) return;
     try {
-      await api.put(`/assignments/${selectedAssignment.id}`, assignmentFormData)
-      setIsEditAssignmentDialogOpen(false)
+      await api.put(`/assignments/${selectedAssignment.id}`, assignmentFormData);
+      setIsEditAssignmentDialogOpen(false);
       setAssignmentFormData({
         title: "",
         description: "",
         course_id: "",
         due_date: "",
-      })
-      setSelectedAssignment(null)
-      const response = await api.get("/assignments")
-      setAssignments(response.data.data || [])
-      setError(null)
+      });
+      setSelectedAssignment(null);
+      const response = await api.get("/assignments");
+      setAssignments(response.data.data || []);
+      setApiError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      setError(error.response?.data?.message || "Error al editar la tarea. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      setApiError(error.response?.data?.message || error.response?.data?.data || "Error al editar la tarea. Inténtalo de nuevo.");
     }
-  }
+  };
 
   const handleDeleteAssignment = async (id: string) => {
     try {
-      await api.delete(`/assignments/${id}`)
-      const response = await api.get("/assignments")
-      setAssignments(response.data.data || [])
-      setError(null)
+      await api.delete(`/assignments/${id}`);
+      const response = await api.get("/assignments");
+      setAssignments(response.data.data || []);
+      setApiError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      setError(error.response?.data?.message || "Error al eliminar la tarea. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      setApiError(error.response?.data?.message || error.response?.data?.data || "Error al eliminar la tarea. Inténtalo de nuevo.");
     }
-  }
+  };
 
   const handleViewSubmissions = async (assignment: Assignment) => {
-    setSelectedAssignment(assignment)
-    setSubmissionGrades({})
-    setSubmissionGrade({})
+    setSelectedAssignment(assignment);
+    setSubmissionGrades({});
+    setSubmissionGrade({});
     try {
-      const gradesResponse = await api.get(`/grades?assignment_id=${assignment.id}`)
-      const grades = gradesResponse.data.data || []
-      const gradeMap: { [key: string]: Grade | null } = {}
+      const gradesResponse = await api.get(`/grades?assignment_id=${assignment.id}`);
+      const grades = gradesResponse.data.data || [];
+      const gradeMap: { [key: string]: Grade | null } = {};
 
-      // Agrupar entregas por estudiante y seleccionar la más reciente
       const latestSubmissions = assignment.submissions_files.reduce((acc, submission) => {
-        const existing = acc[submission.student_id]
+        const existing = acc[submission.student_id];
         if (!existing || new Date(submission.created_at) > new Date(existing.created_at)) {
-          acc[submission.student_id] = submission
+          acc[submission.student_id] = submission;
         }
-        return acc
-      }, {} as { [key: string]: Assignment['submissions_files'][0] })
+        return acc;
+      }, {} as { [key: string]: Assignment['submissions_files'][0] });
 
       Object.values(latestSubmissions).forEach((submission) => {
         const grade = grades.find(
           (g: Grade) => g.assignment_id === assignment.id && g.enrollment_id.includes(submission.student_id)
-        )
-        gradeMap[submission.id] = grade || null
-      })
-      setSubmissionGrades(gradeMap)
+        );
+        gradeMap[submission.id] = grade || null;
+      });
+      setSubmissionGrades(gradeMap);
     } catch (err) {
-      console.error("Error fetching grades:", err)
+      console.error("Error fetching grades:", err);
     }
-    setIsViewSubmissionsDialogOpen(true)
-  }
+    setIsViewSubmissionsDialogOpen(true);
+  };
 
   const handleEditContentClick = (content: Content) => {
-    setSelectedContent(content)
+    setSelectedContent(content);
     setContentFormData({
       name: content.name,
       description: content.description,
@@ -400,76 +343,94 @@ export default function AdminContentsPage() {
       format: content.format,
       file: null,
       course_id: content.course_id,
-    })
-    setIsEditContentDialogOpen(true)
-  }
+    });
+    setIsEditContentDialogOpen(true);
+  };
 
   const handleEditAssignmentClick = (assignment: Assignment) => {
-    setSelectedAssignment(assignment)
+    setSelectedAssignment(assignment);
     setAssignmentFormData({
       title: assignment.title,
       description: assignment.description,
       course_id: assignment.course_id,
       due_date: new Date(assignment.due_date).toISOString().split("T")[0],
-    })
-    setIsEditAssignmentDialogOpen(true)
-  }
+    });
+    setIsEditAssignmentDialogOpen(true);
+  };
 
   const filteredContents = contents.filter((content) => {
     const matchesSearch =
       content.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       content.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      content.course.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCourse = selectedCourse === "all" || content.course_id === selectedCourse
-
-    return matchesSearch && matchesCourse
-  })
+      content.course.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCourse = selectedCourse === "all" || content.course_id === selectedCourse;
+    return matchesSearch && matchesCourse;
+  });
 
   const filteredAssignments = assignments.filter((assignment) => {
-    const courseName = getAssignmentCourseName(assignment)
+    const courseName = getAssignmentCourseName(assignment);
     const matchesSearch =
       assignment.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       assignment.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      courseName.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCourse = selectedCourse === "all" || assignment.course_id === selectedCourse
+      courseName.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCourse = selectedCourse === "all" || assignment.course_id === selectedCourse;
+    return matchesSearch && matchesCourse;
+  });
 
-    return matchesSearch && matchesCourse
-  })
-
-  const getFileIcon = (type: string, format: string) => {
+  const getFileIcon = (type: Content["type"], format: Content["format"]) => {
     switch (type) {
       case "document":
         return format === "pdf" ? (
           <FilePdf className="h-10 w-10 text-red-500" />
         ) : (
           <FileText className="h-10 w-10 text-blue-500" />
-        )
+        );
       case "presentation":
-        return <FileImage className="h-10 w-10 text-orange-500" />
+        return <FileImage className="h-10 w-10 text-orange-500" />;
       case "video":
-        return <Film className="h-10 w-10 text-purple-500" />
+        return <Film className="h-10 w-10 text-purple-500" />;
       case "code":
-        return <FileCode className="h-10 w-10 text-green-500" />
+        return <FileCode className="h-10 w-10 text-green-500" />;
       case "spreadsheet":
-        return <FileSpreadsheet className="h-10 w-10 text-green-500" />
+        return <FileSpreadsheet className="h-10 w-10 text-green-500" />;
       default:
-        return <FileText className="h-10 w-10 text-gray-500" />
+        return <FileText className="h-10 w-10 text-gray-500" />;
     }
-  }
+  };
+
+  const profilePhotoUrl = user?.profilePhotoUrl
+    ? user.profilePhotoUrl.startsWith("http")
+      ? user.profilePhotoUrl
+      : `http://localhost:8000${user.profilePhotoUrl}`
+    : null;
 
   return (
-    <MainLayout userRole="admin" userName={userName} userEmail={userEmail}>
+    <MainLayout
+      userRole={user?.role || "admin"}
+      userName={user?.name || "Cargando..."}
+      userEmail={user?.email || "cargando@mentora.edu"}
+      profilePhotoUrl={profilePhotoUrl}
+    >
       <div className="flex flex-col gap-6 p-4">
         {loadingAuth ? (
           <div className="text-center">Verificando autenticación...</div>
         ) : authError ? (
-          <div className="text-red-500 text-center">{authError}</div>
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{authError}</AlertDescription>
+          </Alert>
         ) : loading ? (
-          <div className="text-center">Cargando...</div>
-        ) : error ? (
-          <div className="text-red-500 text-center">{error}</div>
+          <div className="text-center">Cargando datos...</div>
         ) : (
-          <div>
+          <>
+            {apiError && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{apiError}</AlertDescription>
+              </Alert>
+            )}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <h1 className="text-3xl font-bold tracking-tight">Contenidos</h1>
@@ -493,7 +454,7 @@ export default function AdminContentsPage() {
                   id="course-filter"
                   value={selectedCourse}
                   onChange={(e) => setSelectedCourse(e.target.value)}
-                  className="w-full border rounded-md p-2"
+                  className="w-full border rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="all">Todos los cursos</option>
                   {courses.map((course) => (
@@ -578,7 +539,7 @@ export default function AdminContentsPage() {
                             id="course"
                             value={contentFormData.course_id}
                             onChange={(e) => setContentFormData({ ...contentFormData, course_id: e.target.value })}
-                            className="w-full border rounded-md p-2"
+                            className="w-full border rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           >
                             <option value="">Selecciona un curso</option>
                             {courses.map((course) => (
@@ -593,8 +554,8 @@ export default function AdminContentsPage() {
                           <select
                             id="type"
                             value={contentFormData.type}
-                            onChange={(e) => setContentFormData({ ...contentFormData, type: e.target.value })}
-                            className="w-full border rounded-md p-2"
+                            onChange={(e) => setContentFormData({ ...contentFormData, type: e.target.value as Content["type"] })}
+                            className="w-full border rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           >
                             <option value="document">Documento</option>
                             <option value="presentation">Presentación</option>
@@ -608,8 +569,8 @@ export default function AdminContentsPage() {
                           <select
                             id="format"
                             value={contentFormData.format}
-                            onChange={(e) => setContentFormData({ ...contentFormData, format: e.target.value })}
-                            className="w-full border rounded-md p-2"
+                            onChange={(e) => setContentFormData({ ...contentFormData, format: e.target.value as Content["format"] })}
+                            className="w-full border rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           >
                             <option value="pdf">PDF</option>
                             <option value="doc">DOC</option>
@@ -695,7 +656,7 @@ export default function AdminContentsPage() {
                             id="assignment-course"
                             value={assignmentFormData.course_id}
                             onChange={(e) => setAssignmentFormData({ ...assignmentFormData, course_id: e.target.value })}
-                            className="w-full border rounded-md p-2"
+                            className="w-full border rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           >
                             <option value="">Selecciona un curso</option>
                             {courses.map((course) => (
@@ -861,7 +822,7 @@ export default function AdminContentsPage() {
                 </div>
               </TabsContent>
             </Tabs>
-          </div>
+          </>
         )}
 
         <Dialog open={isEditContentDialogOpen} onOpenChange={setIsEditContentDialogOpen}>
@@ -918,7 +879,7 @@ export default function AdminContentsPage() {
                   id="edit-course"
                   value={contentFormData.course_id}
                   onChange={(e) => setContentFormData({ ...contentFormData, course_id: e.target.value })}
-                  className="w-full border rounded-md p-2"
+                  className="w-full border rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="">Selecciona un curso</option>
                   {courses.map((course) => (
@@ -933,8 +894,8 @@ export default function AdminContentsPage() {
                 <select
                   id="edit-type"
                   value={contentFormData.type}
-                  onChange={(e) => setContentFormData({ ...contentFormData, type: e.target.value })}
-                  className="w-full border rounded-md p-2"
+                  onChange={(e) => setContentFormData({ ...contentFormData, type: e.target.value as Content["type"] })}
+                  className="w-full border rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="document">Documento</option>
                   <option value="presentation">Presentación</option>
@@ -948,8 +909,8 @@ export default function AdminContentsPage() {
                 <select
                   id="edit-format"
                   value={contentFormData.format}
-                  onChange={(e) => setContentFormData({ ...contentFormData, format: e.target.value })}
-                  className="w-full border rounded-md p-2"
+                  onChange={(e) => setContentFormData({ ...contentFormData, format: e.target.value as Content["format"] })}
+                  className="w-full border rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="pdf">PDF</option>
                   <option value="doc">DOC</option>
@@ -1027,7 +988,7 @@ export default function AdminContentsPage() {
                   id="edit-assignment-course"
                   value={assignmentFormData.course_id}
                   onChange={(e) => setAssignmentFormData({ ...assignmentFormData, course_id: e.target.value })}
-                  className="w-full border rounded-md p-2"
+                  className="w-full border rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="">Selecciona un curso</option>
                   {courses.map((course) => (
@@ -1069,14 +1030,14 @@ export default function AdminContentsPage() {
                 <div className="space-y-6">
                   {Object.values(
                     selectedAssignment.submissions_files.reduce((acc, submission) => {
-                      const existing = acc[submission.student_id]
+                      const existing = acc[submission.student_id];
                       if (!existing || new Date(submission.created_at) > new Date(existing.created_at)) {
-                        acc[submission.student_id] = submission
+                        acc[submission.student_id] = submission;
                       }
-                      return acc
+                      return acc;
                     }, {} as { [key: string]: Assignment['submissions_files'][0] })
                   ).map((submission) => {
-                    const grade = submissionGrades[submission.id]
+                    const grade = submissionGrades[submission.id];
                     return (
                       <div key={submission.id} className="grid grid-cols-1 md:grid-cols-5 gap-6 items-start border-b py-4">
                         <div className="col-span-1 md:col-span-4">
@@ -1115,18 +1076,18 @@ export default function AdminContentsPage() {
                                     await api.post(`/assignments/${selectedAssignment?.id}/submissions/${submission.id}/grade`, {
                                       grade_value: parseFloat(submissionGrade[submission.id]),
                                       student_id: submission.student_id,
-                                    })
-                                    const gradesResponse = await api.get(`/grades?assignment_id=${selectedAssignment?.id}`)
-                                    const grades = gradesResponse.data.data || []
+                                    });
+                                    const gradesResponse = await api.get(`/grades?assignment_id=${selectedAssignment?.id}`);
+                                    const grades = gradesResponse.data.data || [];
                                     const updatedGrade = grades.find(
                                       (g: Grade) => g.assignment_id === selectedAssignment?.id && g.enrollment_id.includes(submission.student_id)
-                                    )
-                                    setSubmissionGrades((prev) => ({ ...prev, [submission.id]: updatedGrade || null }))
-                                    setSubmissionGrade((prev) => ({ ...prev, [submission.id]: "" }))
-                                    alert("Nota guardada")
+                                    );
+                                    setSubmissionGrades((prev) => ({ ...prev, [submission.id]: updatedGrade || null }));
+                                    setSubmissionGrade((prev) => ({ ...prev, [submission.id]: "" }));
+                                    alert("Nota guardada");
                                   } catch (err) {
-                                    console.error("Error al guardar la nota:", err)
-                                    alert("Error al guardar la nota")
+                                    console.error("Error al guardar la nota:", err);
+                                    alert("Error al guardar la nota");
                                   }
                                 }
                               }}
@@ -1144,7 +1105,7 @@ export default function AdminContentsPage() {
                           </Button>
                         </div>
                       </div>
-                    )
+                    );
                   })}
                 </div>
               ) : (
@@ -1160,5 +1121,5 @@ export default function AdminContentsPage() {
         </Dialog>
       </div>
     </MainLayout>
-  )
+  );
 }

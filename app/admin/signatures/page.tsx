@@ -1,11 +1,11 @@
-"use client"
+"use client";
 
-import { useState, useEffect, ChangeEvent } from "react"
-import api from "@/lib/api"
-import MainLayout from "@/components/layout/main-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect, ChangeEvent } from "react";
+import api from "@/lib/api";
+import MainLayout from "@/components/layout/main-layout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -14,205 +14,179 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { ChevronDown, Edit, Plus, Search, Trash, FileText } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { AxiosError } from "axios"
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ChevronDown, Edit, Plus, Search, Trash, FileText, AlertCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { AxiosError } from "axios";
+import useAuth from "@/hooks/useAuth";
 
 interface Signature {
-  id: string
-  name: string
-  syllabus_pdf_url: string | null
-  professor_id: string | null
-  professor_name: string | null
-  courses_count: number
+  id: string;
+  name: string;
+  syllabus_pdf_url: string | null;
+  professor_id: string | null;
+  professor_name: string | null;
+  courses_count: number;
 }
 
 interface Professor {
-  id: string
-  name: string
+  id: string;
+  name: string;
 }
 
 interface ApiErrorResponse {
-  message: string
+  message: string;
 }
 
 export default function AdminSignaturesPage() {
-  const router = useRouter()
-  const [token, setToken] = useState<string | null>(
-    typeof window !== "undefined" ? localStorage.getItem("token") : null
-  )
-  const [loadingAuth, setLoadingAuth] = useState(true)
-  const [authError, setAuthError] = useState<string | null>(null)
-  const [signatures, setSignatures] = useState<Signature[]>([])
-  const [professors, setProfessors] = useState<Professor[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [userName, setUserName] = useState("Cargando...")
-  const [userEmail, setUserEmail] = useState("cargando@mentora.edu")
-  const [searchTerm, setSearchTerm] = useState("")
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [selectedSignature, setSelectedSignature] = useState<Signature | null>(null)
+  const router = useRouter();
+  const { user, loading: loadingAuth, error: authError } = useAuth("admin");
+  const [signatures, setSignatures] = useState<Signature[]>([]);
+  const [professors, setProfessors] = useState<Professor[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedSignature, setSelectedSignature] = useState<Signature | null>(null);
 
   const [signatureFormData, setSignatureFormData] = useState<{
-    name: string
-    syllabus_pdf: File | null
-    professor_id: string
+    name: string;
+    syllabus_pdf: File | null;
+    professor_id: string;
   }>({
     name: "",
     syllabus_pdf: null,
     professor_id: "",
-  })
-
-  // Verificar autenticación
-  useEffect(() => {
-    if (!token) {
-      setAuthError("No estás autenticado. Redirigiendo al login...")
-      router.push("/login")
-      return
-    }
-
-    const verifyUser = async () => {
-      try {
-        const response = await api.get("/user")
-        const { role, name, email } = response.data.data
-        if (role !== "admin") {
-          setAuthError("Acceso denegado. Redirigiendo al login...")
-          localStorage.removeItem("token")
-          router.push("/login")
-          return
-        }
-        setUserName(name || "Admin Sistema")
-        setUserEmail(email || "admin@mentora.edu")
-        setLoadingAuth(false)
-      } catch (err) {
-        setAuthError("Token inválido. Redirigiendo al login...")
-        localStorage.removeItem("token")
-        router.push("/login")
-      }
-    }
-
-    verifyUser()
-  }, [token, router])
+  });
 
   // Cargar asignaturas y profesores
   useEffect(() => {
-    const fetchData = async () => {
-      if (loadingAuth || authError) return
+    if (loadingAuth || authError) return;
 
+    const fetchData = async () => {
       try {
-        setLoading(true)
+        setLoading(true);
         const [signaturesRes, professorsRes] = await Promise.all([
           api.get("/signatures"),
           api.get("/users?role=professor"),
-        ])
-        console.log("Signatures response:", signaturesRes.data)
-        console.log("Professors response:", professorsRes.data)
-        setSignatures(signaturesRes.data.data || [])
-        setProfessors(professorsRes.data.data || [])
+        ]);
+        setSignatures(signaturesRes.data.data || []);
+        setProfessors(professorsRes.data.data || []);
       } catch (err: unknown) {
-        const error = err as AxiosError<ApiErrorResponse>
-        console.error("API error:", error.response?.data || error.message)
-        setError(error.response?.data?.message || "Error al cargar los datos. Inténtalo de nuevo.")
+        const error = err as AxiosError<ApiErrorResponse>;
+        setError(error.response?.data?.message || "Error al cargar los datos. Inténtalo de nuevo.");
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    fetchData()
-  }, [loadingAuth, authError])
+    fetchData();
+  }, [loadingAuth, authError]);
 
   // Manejar creación de asignatura
   const handleCreateSignature = async () => {
     try {
-      const formData = new FormData()
-      formData.append("name", signatureFormData.name)
+      const formData = new FormData();
+      formData.append("name", signatureFormData.name);
       if (signatureFormData.syllabus_pdf) {
-        formData.append("syllabus_pdf", signatureFormData.syllabus_pdf)
+        formData.append("syllabus_pdf", signatureFormData.syllabus_pdf);
       }
       if (signatureFormData.professor_id) {
-        formData.append("professor_id", signatureFormData.professor_id)
+        formData.append("professor_id", signatureFormData.professor_id);
       }
 
       await api.post("/signatures", formData, {
         headers: { "Content-Type": "multipart/form-data" },
-      })
-      setIsCreateDialogOpen(false)
-      setSignatureFormData({ name: "", syllabus_pdf: null, professor_id: "" })
-      const response = await api.get("/signatures")
-      setSignatures(response.data.data || [])
-      setError(null)
+      });
+      setIsCreateDialogOpen(false);
+      setSignatureFormData({ name: "", syllabus_pdf: null, professor_id: "" });
+      const response = await api.get("/signatures");
+      setSignatures(response.data.data || []);
+      setError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      setError(error.response?.data?.message || "Error al crear la asignatura. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      setError(error.response?.data?.message || "Error al crear la asignatura. Inténtalo de nuevo.");
     }
-  }
+  };
 
   // Manejar edición de asignatura
   const handleEditSignature = async () => {
-    if (!selectedSignature) return
+    if (!selectedSignature) return;
     try {
-      const formData = new FormData()
-      formData.append("name", signatureFormData.name)
+      const formData = new FormData();
+      formData.append("name", signatureFormData.name);
       if (signatureFormData.syllabus_pdf) {
-        formData.append("syllabus_pdf", signatureFormData.syllabus_pdf)
+        formData.append("syllabus_pdf", signatureFormData.syllabus_pdf);
       }
       if (signatureFormData.professor_id) {
-        formData.append("professor_id", signatureFormData.professor_id)
+        formData.append("professor_id", signatureFormData.professor_id);
       }
-      formData.append("_method", "PUT")
+      formData.append("_method", "PUT");
 
       await api.post(`/signatures/${selectedSignature.id}`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
-      })
-      setIsEditDialogOpen(false)
-      setSignatureFormData({ name: "", syllabus_pdf: null, professor_id: "" })
-      setSelectedSignature(null)
-      const response = await api.get("/signatures")
-      setSignatures(response.data.data || [])
-      setError(null)
+      });
+      setIsEditDialogOpen(false);
+      setSignatureFormData({ name: "", syllabus_pdf: null, professor_id: "" });
+      setSelectedSignature(null);
+      const response = await api.get("/signatures");
+      setSignatures(response.data.data || []);
+      setError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      setError(error.response?.data?.message || "Error al editar la asignatura. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      setError(error.response?.data?.message || "Error al editar la asignatura. Inténtalo de nuevo.");
     }
-  }
+  };
 
   // Manejar eliminación de asignatura
   const handleDeleteSignature = async (id: string) => {
     try {
-      await api.delete(`/signatures/${id}`)
-      const response = await api.get("/signatures")
-      setSignatures(response.data.data || [])
-      setError(null)
+      await api.delete(`/signatures/${id}`);
+      const response = await api.get("/signatures");
+      setSignatures(response.data.data || []);
+      setError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      setError(error.response?.data?.message || "Error al eliminar la asignatura. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      setError(error.response?.data?.message || "Error al eliminar la asignatura. Inténtalo de nuevo.");
     }
-  }
+  };
 
   // Manejar clic en editar
   const handleEditClick = (signature: Signature) => {
-    setSelectedSignature(signature)
+    setSelectedSignature(signature);
     setSignatureFormData({
       name: signature.name || "",
       syllabus_pdf: null,
       professor_id: signature.professor_id || "",
-    })
-    setIsEditDialogOpen(true)
-  }
+    });
+    setIsEditDialogOpen(true);
+  };
 
   // Filtrar asignaturas
   const filteredSignatures = signatures.filter(
     (signature) =>
       (signature.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (signature.professor_name || "").toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  );
+
+  // Ajustar la URL de la foto de perfil para el MainLayout
+  const profilePhotoUrl = user?.profilePhotoUrl
+    ? user.profilePhotoUrl.startsWith("http")
+      ? user.profilePhotoUrl
+      : `http://localhost:80${user.profilePhotoUrl}`
+    : null;
 
   return (
-    <MainLayout userRole="admin" userName={userName} userEmail={userEmail}>
+    <MainLayout
+      userRole={user?.role || "admin"}
+      userName={user?.name || "Cargando..."}
+      userEmail={user?.email || "cargando@mentora.edu"}
+      profilePhotoUrl={profilePhotoUrl}
+    >
       <div className="flex flex-col gap-6 p-4">
         {loadingAuth ? (
           <div className="text-center">Verificando autenticación...</div>
@@ -220,10 +194,15 @@ export default function AdminSignaturesPage() {
           <div className="text-red-500 text-center">{authError}</div>
         ) : loading ? (
           <div className="text-center">Cargando...</div>
-        ) : error ? (
-          <div className="text-red-500 text-center">{error}</div>
         ) : (
           <>
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <h1 className="text-3xl font-bold tracking-tight">Asignaturas</h1>
@@ -397,7 +376,7 @@ export default function AdminSignaturesPage() {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-syllabus_pdf">PDF del temario</Label>
+                    <Label htmlFor="edit-syllabus_pdf">PDF del temario (opcional)</Label>
                     <Input
                       id="edit-syllabus_pdf"
                       type="file"
@@ -450,5 +429,5 @@ export default function AdminSignaturesPage() {
         )}
       </div>
     </MainLayout>
-  )
+  );
 }

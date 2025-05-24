@@ -1,12 +1,12 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useRef } from "react"
-import { useRouter } from "next/navigation"
-import api from "@/lib/api"
-import MainLayout from "@/components/layout/main-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import api from "@/lib/api";
+import MainLayout from "@/components/layout/main-layout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -15,330 +15,254 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { ChevronDown, Download, Edit, FileText, Plus, Search, Trash, AlertCircle } from "lucide-react"
-import { AxiosError } from "axios"
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ChevronDown, Download, Edit, FileText, Plus, Search, Trash, AlertCircle } from "lucide-react";
+import { AxiosError } from "axios";
+import useAuth from "@/hooks/useAuth";
 
 interface Enrollment {
-  id: string
-  student_id: string
-  student_name: string
-  student_email: string | null
-  course_id: string
-  course_name: string
-  professor_name: string | null
-  enrollment_date: string
-  created_at: string
-  final_grade: number | string | null | undefined
-  semester: { id: string; start_date: string; end_date: string } | null
-  signature: { id: string; name: string } | null
+  id: string;
+  student_id: string;
+  student_name: string;
+  student_email: string | null;
+  student_profile_photo_url: string | null;
+  course_id: string;
+  course_name: string;
+  professor_name: string | null;
+  enrollment_date: string;
+  created_at: string;
+  final_grade: number | string | null | undefined;
+  semester: { id: string; start_date: string; end_date: string; is_active: boolean } | null;
+  signature: { id: string; name: string } | null;
 }
 
 interface Course {
-  id: string
-  signature?: { name: string }
-  name?: string
-  is_active?: boolean
+  id: string;
+  signature?: { name: string };
+  name?: string;
+  is_active?: boolean;
 }
 
 interface Student {
-  id: string
-  name: string
+  id: string;
+  name: string;
 }
 
 interface Semester {
-  id: string
-  start_date: string
-  end_date: string
+  id: string;
+  start_date: string;
+  end_date: string;
 }
 
 interface ApiErrorResponse {
-  message?: string
-  data?: string
-  errors?: { [key: string]: string[] }
+  message?: string;
+  data?: string;
+  errors?: { [key: string]: string[] };
 }
 
 const getSemesterName = (semester: Semester | null): string => {
-  if (!semester) return "Sin semestre"
-  const year = new Date(semester.start_date).getFullYear()
-  const month = new Date(semester.start_date).getMonth() + 1
-  const semesterNumber = month <= 6 ? "1" : "2"
-  return `${year}-${semesterNumber}`
-}
+  if (!semester) return "Sin semestre";
+  const year = new Date(semester.start_date).getFullYear();
+  const month = new Date(semester.start_date).getMonth() + 1;
+  const semesterNumber = month <= 6 ? "1" : "2";
+  return `${year}-${semesterNumber}`;
+};
 
 const formatFinalGrade = (grade: number | string | null | undefined): string => {
-  if (grade == null || grade === undefined) return "Pendiente"
-  const num = typeof grade === "string" ? parseFloat(grade) : grade
-  return typeof num === "number" && !isNaN(num) && num > 0 ? num.toFixed(1) : "Pendiente"
-}
+  if (grade == null || grade === undefined) return "Pendiente";
+  const num = typeof grade === "string" ? parseFloat(grade) : grade;
+  return typeof num === "number" && !isNaN(num) && num > 0 ? num.toFixed(1) : "Pendiente";
+};
 
-// Usar enrollments para mapear course_id a course_name
 const getCourseName = (course: Course, enrollments: Enrollment[]): string => {
-  const enrollment = enrollments.find((e) => e.course_id === course.id)
-  return enrollment?.course_name || course.signature?.name || course.name || "Curso sin nombre"
-}
+  const enrollment = enrollments.find((e) => e.course_id === course.id);
+  return enrollment?.course_name || course.signature?.name || course.name || "Curso sin nombre";
+};
 
 export default function AdminEnrollmentsPage() {
-  const router = useRouter()
-  const [token, setToken] = useState<string | null>(
-    typeof window !== "undefined" ? localStorage.getItem("token") : null
-  )
-  const [loadingAuth, setLoadingAuth] = useState(true)
-  const [authError, setAuthError] = useState<string | null>(null)
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([])
-  const [courses, setCourses] = useState<Course[]>([])
-  const [students, setStudents] = useState<Student[]>([])
-  const [semesters, setSemesters] = useState<Semester[]>([])
-  const [loading, setLoading] = useState(true)
-  const [apiError, setApiError] = useState<string | null>(null)
-  const [formError, setFormError] = useState<string | null>(null)
-  const [userName, setUserName] = useState("Cargando...")
-  const [userEmail, setUserEmail] = useState("cargando@mentora.edu")
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedCourse, setSelectedCourse] = useState("all")
-  const [selectedSemester, setSelectedSemester] = useState("all")
-  const [showInactiveCourses, setShowInactiveCourses] = useState(false)
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [selectedEnrollment, setSelectedEnrollment] = useState<Enrollment | null>(null)
-  const createDialogRef = useRef<HTMLDivElement>(null)
-  const editDialogRef = useRef<HTMLDivElement>(null)
+  const router = useRouter();
+  const { user, loading: loadingAuth, error: authError } = useAuth("admin");
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [semesters, setSemesters] = useState<Semester[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCourse, setSelectedCourse] = useState("all");
+  const [selectedSemester, setSelectedSemester] = useState("all");
+  const [showInactiveSemesters, setShowInactiveSemesters] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedEnrollment, setSelectedEnrollment] = useState<Enrollment | null>(null);
+  const createDialogRef = useRef<HTMLDivElement>(null);
+  const editDialogRef = useRef<HTMLDivElement>(null);
 
   const [enrollmentFormData, setEnrollmentFormData] = useState({
     student_id: "",
     course_id: "",
     enrollment_date: "",
-  })
+  });
 
   const apiWithTimeout = async (url: string, timeoutMs: number = 10000) => {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await api.get(url, { signal: controller.signal })
-      clearTimeout(timeoutId)
-      return response
+      const response = await api.get(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      return response;
     } catch (err) {
-      clearTimeout(timeoutId)
-      throw err
+      clearTimeout(timeoutId);
+      throw err;
     }
-  }
+  };
 
   useEffect(() => {
-    console.log("Iniciando verificación de autenticación...")
-    if (!token) {
-      console.log("No hay token, redirigiendo al login")
-      setAuthError("No estás autenticado. Redirigiendo al login...")
-      router.push("/login")
-      return
-    }
-
-    const verifyUser = async () => {
-      try {
-        console.log("Haciendo solicitud a /user")
-        const response = await apiWithTimeout("/user")
-        console.log("Respuesta de /user:", response.data)
-        const { role, name, email } = response.data.data
-        if (role !== "admin") {
-          console.log("Rol no es admin, redirigiendo al login")
-          setAuthError("Acceso denegado. Redirigiendo al login...")
-          localStorage.removeItem("token")
-          router.push("/login")
-          return
-        }
-        setUserName(name || "Admin Sistema")
-        setUserEmail(email || "admin@mentora.edu")
-        setLoadingAuth(false)
-        console.log("Autenticación completada, loadingAuth: false")
-      } catch (err) {
-        console.error("Error en autenticación:", err)
-        setAuthError("Token inválido. Redirigiendo al login...")
-        localStorage.removeItem("token")
-        router.push("/login")
-      }
-    }
-
-    verifyUser()
-  }, [token, router])
-
-  useEffect(() => {
-    console.log("Iniciando carga de datos, loadingAuth:", loadingAuth, "authError:", authError)
-    if (loadingAuth || authError) {
-      console.log("No se carga datos, esperando autenticación")
-      return
-    }
+    if (loadingAuth || authError) return;
 
     const fetchData = async () => {
       try {
-        setLoading(true)
-        console.log("Haciendo solicitudes a /enrollments, /courses, /users, /semesters")
+        setLoading(true);
         const [enrollmentsRes, coursesRes, studentsRes, semestersRes] = await Promise.all([
-          apiWithTimeout("/enrollments").catch((err) => {
-            console.error("Error en /enrollments:", err)
-            throw err
-          }),
-          apiWithTimeout("/courses").catch((err) => {
-            console.error("Error en /courses:", err)
-            return { data: { data: [] } }
-          }),
-          apiWithTimeout("/users?role=student").catch((err) => {
-            console.error("Error en /users:", err)
-            return { data: { data: [] } }
-          }),
-          apiWithTimeout("/semesters").catch((err) => {
-            console.error("Error en /semesters:", err)
-            return { data: { data: [] } }
-          }),
-        ])
-        console.log("Enrollments response:", enrollmentsRes.data)
-        console.log("Courses response:", coursesRes.data)
-        console.log("Students response:", studentsRes.data)
-        console.log("Semesters response:", semestersRes.data)
-        enrollmentsRes.data.data.forEach((enrollment: Enrollment, index: number) => {
-          console.log(`Enrollment ${index}:`, {
-            final_grade: { value: enrollment.final_grade, type: typeof enrollment.final_grade },
-            student_email: enrollment.student_email,
-            professor_name: enrollment.professor_name,
-            course_name: enrollment.course_name,
-            course_id: enrollment.course_id,
-          })
-        })
-        coursesRes.data.data.forEach((course: Course, index: number) => {
-          console.log(`Course ${index}:`, {
-            id: course.id,
-            name: course.name,
-            signature_name: course.signature?.name,
-            is_active: course.is_active,
-          })
-        })
-        setEnrollments(enrollmentsRes.data.data || [])
-        setCourses(coursesRes.data.data || [])
-        setStudents(studentsRes.data.data || [])
-        setSemesters(semestersRes.data.data || [])
+          apiWithTimeout("/enrollments"),
+          apiWithTimeout("/courses"),
+          apiWithTimeout("/users?role=student"),
+          apiWithTimeout("/semesters"),
+        ]);
+        setEnrollments(enrollmentsRes.data.data || []);
+        setCourses(coursesRes.data.data || []);
+        setStudents(studentsRes.data.data || []);
+        setSemesters(semestersRes.data.data || []);
         if (!coursesRes.data.data.length || !studentsRes.data.data.length || !semestersRes.data.data.length) {
-          setApiError("No se pudieron cargar algunos datos. Inténtalo de nuevo.")
+          setApiError("No se pudieron cargar algunos datos. Inténtalo de nuevo.");
         }
       } catch (err: unknown) {
-        const error = err as AxiosError<ApiErrorResponse>
-        console.error("API error:", error.response?.data || error.message)
-        setApiError(error.response?.data?.message || error.response?.data?.data || "Error al cargar los datos. Inténtalo de nuevo.")
+        const error = err as AxiosError<ApiErrorResponse>;
+        setApiError(error.response?.data?.message || error.response?.data?.data || "Error al cargar los datos. Inténtalo de nuevo.");
       } finally {
-        setLoading(false)
-        console.log("Carga completada, loading: false")
+        setLoading(false);
       }
-    }
+    };
 
-    fetchData()
-  }, [loadingAuth, authError])
+    fetchData();
+  }, [loadingAuth, authError]);
 
   useEffect(() => {
     if (formError && isCreateDialogOpen && createDialogRef.current) {
-      createDialogRef.current.scrollTop = 0
+      createDialogRef.current.scrollTop = 0;
     }
     if (formError && isEditDialogOpen && editDialogRef.current) {
-      editDialogRef.current.scrollTop = 0
+      editDialogRef.current.scrollTop = 0;
     }
-  }, [formError, isCreateDialogOpen, isEditDialogOpen])
+  }, [formError, isCreateDialogOpen, isEditDialogOpen]);
 
   const handleCreateEnrollment = async (event: React.FormEvent) => {
-    event.preventDefault()
-    setFormError(null)
+    event.preventDefault();
+    setFormError(null);
 
     try {
-      console.log("Creando matrícula con datos:", enrollmentFormData)
-      await api.post("/enrollments", enrollmentFormData)
-      setIsCreateDialogOpen(false)
-      setEnrollmentFormData({ student_id: "", course_id: "", enrollment_date: "" })
-      setFormError(null)
-      const response = await apiWithTimeout("/enrollments")
-      setEnrollments(response.data.data || [])
-      setApiError(null)
-      console.log("Matrícula creada, datos actualizados")
+      await api.post("/enrollments", enrollmentFormData);
+      setIsCreateDialogOpen(false);
+      setEnrollmentFormData({ student_id: "", course_id: "", enrollment_date: "" });
+      setFormError(null);
+      const response = await apiWithTimeout("/enrollments");
+      setEnrollments(response.data.data || []);
+      setApiError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      console.error("Error al crear matrícula:", error.response?.data || error.message)
+      const error = err as AxiosError<ApiErrorResponse>;
       const errorMessages = error.response?.data?.errors
         ? Object.values(error.response.data.errors).flat().join(" ")
-        : error.response?.data?.message || error.response?.data?.data || "Error al crear la matrícula. Inténtalo de nuevo."
-      setFormError(errorMessages)
+        : error.response?.data?.message || error.response?.data?.data || "Error al crear la matrícula. Inténtalo de nuevo.";
+      setFormError(errorMessages);
     }
-  }
+  };
 
   const handleEditEnrollment = async (event: React.FormEvent) => {
-    event.preventDefault()
-    setFormError(null)
+    event.preventDefault();
+    setFormError(null);
 
-    if (!selectedEnrollment) return
+    if (!selectedEnrollment) return;
 
     try {
-      console.log("Editando matrícula con ID:", selectedEnrollment.id, "datos:", enrollmentFormData)
-      await api.put(`/enrollments/${selectedEnrollment.id}`, enrollmentFormData)
-      setIsEditDialogOpen(false)
-      setEnrollmentFormData({ student_id: "", course_id: "", enrollment_date: "" })
-      setSelectedEnrollment(null)
-      setFormError(null)
-      const response = await apiWithTimeout("/enrollments")
-      setEnrollments(response.data.data || [])
-      setApiError(null)
-      console.log("Matrícula editada, datos actualizados")
+      await api.put(`/enrollments/${selectedEnrollment.id}`, enrollmentFormData);
+      setIsEditDialogOpen(false);
+      setEnrollmentFormData({ student_id: "", course_id: "", enrollment_date: "" });
+      setSelectedEnrollment(null);
+      setFormError(null);
+      const response = await apiWithTimeout("/enrollments");
+      setEnrollments(response.data.data || []);
+      setApiError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      console.error("Error al editar matrícula:", error.response?.data || error.message)
+      const error = err as AxiosError<ApiErrorResponse>;
       const errorMessages = error.response?.data?.errors
         ? Object.values(error.response.data.errors).flat().join(" ")
-        : error.response?.data?.message || error.response?.data?.data || "Error al editar la matrícula. Inténtalo de nuevo."
-      setFormError(errorMessages)
+        : error.response?.data?.message || error.response?.data?.data || "Error al editar la matrícula. Inténtalo de nuevo.";
+      setFormError(errorMessages);
     }
-  }
+  };
 
   const handleDeleteEnrollment = async (id: string) => {
     try {
-      console.log("Eliminando matrícula con ID:", id)
-      await api.delete(`/enrollments/${id}`)
-      const response = await apiWithTimeout("/enrollments")
-      setEnrollments(response.data.data || [])
-      setApiError(null)
-      console.log("Matrícula eliminada, datos actualizados")
+      await api.delete(`/enrollments/${id}`);
+      const response = await apiWithTimeout("/enrollments");
+      setEnrollments(response.data.data || []);
+      setApiError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      console.error("Error al eliminar matrícula:", error.response?.data || error.message)
-      setApiError(error.response?.data?.message || error.response?.data?.data || "Error al eliminar la matrícula. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      setApiError(error.response?.data?.message || error.response?.data?.data || "Error al eliminar la matrícula. Inténtalo de nuevo.");
     }
-  }
+  };
 
   const handleEditClick = (enrollment: Enrollment) => {
-    console.log("Abriendo edición para matrícula:", enrollment)
-    setSelectedEnrollment(enrollment)
+    setSelectedEnrollment(enrollment);
     setEnrollmentFormData({
       student_id: enrollment.student_id,
       course_id: enrollment.course_id,
-      enrollment_date: enrollment.enrollment_date.split("T")[0],
-    })
-    setFormError(null)
-    setIsEditDialogOpen(true)
-  }
+      enrollment_date: enrollment.enrollment_date,
+    });
+    setFormError(null);
+    setIsEditDialogOpen(true);
+  };
 
   const filteredEnrollments = enrollments.filter((enrollment) => {
+    // Debug log to inspect semester.is_active and student_profile_photo_url
+    console.log(`Enrollment ${enrollment.id}, Student ID: ${enrollment.student_id}, Name: ${enrollment.student_name}, Semester is_active: ${enrollment.semester?.is_active}, Student photo: ${enrollment.student_profile_photo_url}`);
     const matchesSearch =
       (enrollment.student_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (enrollment.student_email || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (enrollment.course_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (enrollment.professor_name || "").toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCourse = selectedCourse === "all" || enrollment.course_id === selectedCourse
+      (enrollment.professor_name || "").toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCourse = selectedCourse === "all" || enrollment.course_id === selectedCourse;
     const matchesSemester =
-      selectedSemester === "all" || (enrollment.semester && enrollment.semester.id === selectedSemester)
+      selectedSemester === "all" || (enrollment.semester && enrollment.semester.id === selectedSemester);
+    const matchesSemesterStatus = showInactiveSemesters || (enrollment.semester && enrollment.semester.is_active === true);
+    return matchesSearch && matchesCourse && matchesSemester && matchesSemesterStatus;
+  });
 
-    return matchesSearch && matchesCourse && matchesSemester
-  })
+  const filteredCourses = showInactiveSemesters ? courses : courses.filter((course) => {
+    const enrollment = enrollments.find((e) => e.course_id === course.id);
+    return enrollment?.semester?.is_active === true;
+  });
 
-  const filteredCourses = showInactiveCourses ? courses : courses.filter((course) => course.is_active !== false)
+  const profilePhotoUrl = user?.profilePhotoUrl
+    ? user.profilePhotoUrl.startsWith("http")
+      ? user.profilePhotoUrl
+      : `http://localhost:8000${user.profilePhotoUrl}`
+    : null;
 
   return (
-    <MainLayout userRole="admin" userName={userName} userEmail={userEmail}>
+    <MainLayout
+      userRole={user?.role || "admin"}
+      userName={user?.name || "Cargando..."}
+      userEmail={user?.email || "cargando@mentora.edu"}
+      profilePhotoUrl={profilePhotoUrl}
+    >
       <div className="flex flex-col gap-6 p-4">
         {loadingAuth ? (
           <div className="text-center">Verificando autenticación...</div>
@@ -364,8 +288,8 @@ export default function AdminEnrollmentsPage() {
                 <Dialog
                   open={isCreateDialogOpen}
                   onOpenChange={(open) => {
-                    setIsCreateDialogOpen(open)
-                    if (!open) setFormError(null)
+                    setIsCreateDialogOpen(open);
+                    if (!open) setFormError(null);
                   }}
                 >
                   <DialogTrigger asChild>
@@ -472,13 +396,13 @@ export default function AdminEnrollmentsPage() {
                     <div className="flex items-center gap-2">
                       <input
                         type="checkbox"
-                        id="showInactiveCourses"
-                        checked={showInactiveCourses}
-                        onChange={(e) => setShowInactiveCourses(e.target.checked)}
+                        id="showInactiveSemesters"
+                        checked={showInactiveSemesters}
+                        onChange={(e) => setShowInactiveSemesters(e.target.checked)}
                         className="h-4 w-4"
                       />
-                      <Label htmlFor="showInactiveCourses" className="text-sm">
-                        Mostrar cursos inactivos
+                      <Label htmlFor="showInactiveSemesters" className="text-sm">
+                        Mostrar semestres inactivos
                       </Label>
                     </div>
                     <select
@@ -533,6 +457,16 @@ export default function AdminEnrollmentsPage() {
                           <td className="p-4 align-middle">
                             <div className="flex items-center gap-3">
                               <Avatar>
+                                {enrollment.student_profile_photo_url && (
+                                  <AvatarImage
+                                    src={
+                                      enrollment.student_profile_photo_url.startsWith("http")
+                                        ? enrollment.student_profile_photo_url
+                                        : `http://localhost:8000${enrollment.student_profile_photo_url}`
+                                    }
+                                    alt={enrollment.student_name}
+                                  />
+                                )}
                                 <AvatarFallback>
                                   {enrollment.student_name
                                     .split(" ")
@@ -558,9 +492,13 @@ export default function AdminEnrollmentsPage() {
                           <td className="p-4 align-middle">
                             <Badge
                               variant="outline"
-                              className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
+                              className={
+                                enrollment.semester?.is_active
+                                  ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
+                                  : "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300"
+                              }
                             >
-                              Activo
+                              {enrollment.semester?.is_active ? "Activo" : "Inactivo"}
                             </Badge>
                           </td>
                           <td className="p-4 align-middle text-right">
@@ -601,8 +539,8 @@ export default function AdminEnrollmentsPage() {
             <Dialog
               open={isEditDialogOpen}
               onOpenChange={(open) => {
-                setIsEditDialogOpen(open)
-                if (!open) setFormError(null)
+                setIsEditDialogOpen(open);
+                if (!open) setFormError(null);
               }}
             >
               <DialogContent className="max-h-[80vh] overflow-y-auto" ref={editDialogRef}>
@@ -676,5 +614,5 @@ export default function AdminEnrollmentsPage() {
         )}
       </div>
     </MainLayout>
-  )
+  );
 }
