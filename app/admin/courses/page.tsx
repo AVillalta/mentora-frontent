@@ -29,9 +29,9 @@ interface Course {
   schedule: { day: string; start_time: string; end_time: string }[] | null;
   weighting: { homework: number; midterms: number; final_exam: number } | null;
   signature: string | null;
-  semester: string | null;
+  semester: { id: string; name: string; is_active: boolean } | null;
   professor: string | null;
-  enrollments_count: number;
+  students: number;
   status: "active" | "inactive";
 }
 
@@ -286,7 +286,7 @@ export default function AdminCoursesPage() {
         final_exam: course.weighting?.final_exam?.toString() || "0.3",
       },
       signature_id: course.signature ? signatures.find((s) => s.name === course.signature)?.id || "" : "",
-      semester_id: course.semester ? semesters.find((s) => s.name === course.semester)?.id || "" : "",
+      semester_id: course.semester?.name ? semesters.find((s) => s.name === course.semester.name)?.id || "" : "",
     });
     setIsEditDialogOpen(true);
   };
@@ -314,9 +314,8 @@ export default function AdminCoursesPage() {
     const matchesSubject =
       selectedSubject === "all" ||
       signatures.find((s) => s.id === selectedSubject)?.name === course.signature;
-    const matchesSemester =
-      selectedSemester === "all" ||
-      semesters.find((s) => s.id === selectedSemester)?.name === course.semester;
+    const matchesSemester = selectedSemester === "all" ||
+      (course.semester && semesters.find((s) => s.id === selectedSemester)?.name === course.semester.name);
     const matchesStatus = showInactive || course.status === "active";
 
     return matchesSearch && matchesSubject && matchesSemester && matchesStatus;
@@ -324,7 +323,7 @@ export default function AdminCoursesPage() {
 
   // Ajustar la URL de la foto de perfil
   const profilePhotoUrl = user?.profilePhotoUrl
-    ? user.profilePhotoUrl.startsWith('http')
+    ? user.profilePhotoUrl.startsWith("http")
       ? user.profilePhotoUrl
       : `http://localhost:80${user.profilePhotoUrl}`
     : null;
@@ -600,9 +599,9 @@ export default function AdminCoursesPage() {
                           <td className="p-4 align-middle font-medium">{course.code || "Sin código"}</td>
                           <td className="p-4 align-middle">{course.signature || "Sin asignatura"}</td>
                           <td className="p-4 align-middle">{course.professor || "Sin profesor"}</td>
-                          <td className="p-4 align-middle">{course.semester || "Sin semestre"}</td>
+                          <td className="p-4 align-middle">{course.semester?.name || "Sin semestre"}</td>
                           <td className="p-4 align-middle">{formatSchedule(course.schedule)}</td>
-                          <td className="p-4 align-middle">{course.enrollments_count || 0}</td>
+                          <td className="p-4 align-middle">{course.students || 0}</td>
                           <td className="p-4 align-middle">
                             <Badge
                               variant="outline"
