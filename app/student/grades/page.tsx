@@ -1,90 +1,58 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import MainLayout from "@/components/layout/main-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { ChevronDown, Download, FileText, Search } from "lucide-react"
-import Link from "next/link"
-import api from "@/lib/api"
-import { AxiosError } from "axios"
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import MainLayout from "@/components/layout/main-layout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ChevronDown, Download, FileText, Search } from "lucide-react";
+import Link from "next/link";
+import api from "@/lib/api";
+import { AxiosError } from "axios";
+import useAuth from "@/hooks/useAuth";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 interface Grade {
-  id: string
-  grade_type: string
-  grade_value: number | string | null | undefined
-  grade_date: string
-  enrollment_id: string
-  course_name?: string
-  professor_name?: string
-  course_id?: number
+  id: string;
+  grade_type: string;
+  grade_value: number | string | null | undefined;
+  grade_date: string;
+  enrollment_id: string;
+  course_name?: string;
+  professor_name?: string;
+  course_id?: number;
 }
 
 interface ApiErrorResponse {
-  message?: string
-  data?: string
-  errors?: { [key: string]: string[] }
+  message?: string;
+  data?: string;
+  errors?: { [key: string]: string[] };
 }
 
 export default function StudentGradesPage() {
-  const router = useRouter()
-  const [grades, setGrades] = useState<Grade[]>([])
-  const [user, setUser] = useState<{ name: string; email: string }>({ name: "Cargando...", email: "cargando@estudiante.edu" })
-  const [loadingAuth, setLoadingAuth] = useState(true)
-  const [loadingData, setLoadingData] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedSubject, setSelectedSubject] = useState("all")
-  const [selectedType, setSelectedType] = useState("all")
-  const [token, setToken] = useState<string | null>(
-    typeof window !== "undefined" ? localStorage.getItem("token") : null
-  )
-
-  // Verificar autenticación
-  useEffect(() => {
-    if (!token) {
-      setError("No estás autenticado. Redirigiendo al login...")
-      setTimeout(() => router.push("/login"), 1000)
-      return
-    }
-
-    const verifyUser = async () => {
-      try {
-        console.log("Verificando usuario...")
-        const response = await api.get("/user", { timeout: 10000 })
-        const { role, name, email } = response.data.data || {}
-        console.log("Usuario verificado:", { role, name, email })
-        if (role !== "student") {
-          throw new Error("Acceso denegado. No eres estudiante.")
-        }
-        setUser({ name: name || "Estudiante", email: email || "estudiante@mentora.edu" })
-        setLoadingAuth(false)
-      } catch (err: unknown) {
-        const error = err as AxiosError<ApiErrorResponse>
-        console.error("Error al verificar usuario:", error.message, error.response?.data)
-        setError(error.response?.data?.message || "Token inválido. Redirigiendo al login...")
-        localStorage.removeItem("token")
-        setTimeout(() => router.push("/login"), 1000)
-      }
-    }
-
-    verifyUser()
-  }, [token, router])
+  const router = useRouter();
+  const { user, loading: loadingAuth, error: authError } = useAuth("student");
+  const [grades, setGrades] = useState<Grade[]>([]);
+  const [loadingData, setLoadingData] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedSubject, setSelectedSubject] = useState("all");
+  const [selectedType, setSelectedType] = useState("all");
 
   // Fetch de calificaciones
   useEffect(() => {
-    if (loadingAuth || !token) return
+    if (loadingAuth || authError) return;
 
     const fetchGrades = async () => {
       try {
-        setLoadingData(true)
-        console.log("Iniciando fetch de calificaciones...")
-        const response = await api.get("/grades", { timeout: 10000 })
-        console.log("Respuesta de /grades:", response.data)
-        const data = response.data.data || []
+        setLoadingData(true);
+        console.log("Iniciando fetch de calificaciones...");
+        const response = await api.get("/grades", { timeout: 10000 });
+        console.log("Respuesta de /grades:", response.data);
+        const data = response.data.data || [];
         // Normalizar datos
         const validGrades = data
           .map((grade: Grade) => ({
@@ -96,101 +64,147 @@ export default function StudentGradesPage() {
           }))
           .filter((grade: Grade) => {
             if (grade.grade_value == null || typeof grade.grade_value !== 'number') {
-              return false
+              return false;
             }
-            return true
-          })
-        console.log("Calificaciones normalizadas:", validGrades)
-        setGrades(validGrades)
-        setError(null)
+            return true;
+          });
+        console.log("Calificaciones normalizadas:", validGrades);
+        setGrades(validGrades);
+        setError(null);
       } catch (err: unknown) {
-        const error = err as AxiosError<ApiErrorResponse>
-        console.error("Error al cargar calificaciones:", error.message, error.response?.data)
-        setError(error.response?.data?.message || "Error al cargar las calificaciones.")
+        const error = err as AxiosError<ApiErrorResponse>;
+        console.error("Error al cargar calificaciones:", error.message, error.response?.data);
+        setError(error.response?.data?.message || "Error al cargar las calificaciones.");
       } finally {
-        setLoadingData(false)
-        console.log("Fetch de calificaciones completado, loadingData:", false)
+        setLoadingData(false);
+        console.log("Fetch de calificaciones completado, loadingData:", false);
       }
-    }
+    };
 
-    fetchGrades()
-  }, [loadingAuth, token])
+    fetchGrades();
+  }, [loadingAuth, authError]);
 
   // Filtros
-  const subjects = [...new Set(grades.map((grade) => grade.course_name).filter(Boolean))] as string[]
-  const gradeTypes = [...new Set(grades.map((grade) => grade.grade_type).filter(Boolean))] as string[]
+  const subjects = [...new Set(grades.map((grade) => grade.course_name).filter(Boolean))] as string[];
+  const gradeTypes = [...new Set(grades.map((grade) => grade.grade_type).filter(Boolean))] as string[];
 
   const filteredGrades = grades.filter((grade) => {
     const matchesSearch =
       (grade.course_name?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
-      (grade.grade_type?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
-    const matchesSubject = selectedSubject === "all" || grade.course_name === selectedSubject
-    const matchesType = selectedType === "all" || grade.grade_type === selectedType
+      (grade.grade_type?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
+    const matchesSubject = selectedSubject === "all" || grade.course_name === selectedSubject;
+    const matchesType = selectedType === "all" || grade.grade_type === selectedType;
 
-    return matchesSearch && matchesSubject && matchesType
-  })
+    return matchesSearch && matchesSubject && matchesType;
+  });
 
   // Calcular el promedio general
   const calculateOverallAverage = () => {
-    if (filteredGrades.length === 0) return "0.0"
-    const validGrades = filteredGrades.filter(grade => grade.grade_value != null && typeof grade.grade_value === 'number')
-    const sum = validGrades.reduce((total, grade) => total + (grade.grade_value as number), 0)
-    return (sum / validGrades.length).toFixed(1)
-  }
+    if (filteredGrades.length === 0) return "0.0";
+    const validGrades = filteredGrades.filter(grade => grade.grade_value != null && typeof grade.grade_value === 'number');
+    const sum = validGrades.reduce((total, grade) => total + (grade.grade_value as number), 0);
+    return (sum / validGrades.length).toFixed(1);
+  };
 
   // Calcular promedios por asignatura
   const calculateSubjectAverages = () => {
-    const averages: { [key: string]: string } = {}
+    const averages: { [key: string]: string } = {};
     subjects.forEach((subject) => {
-      const subjectGrades = filteredGrades.filter((grade) => grade.course_name === subject)
-      const validGrades = subjectGrades.filter(grade => grade.grade_value != null && typeof grade.grade_value === 'number')
-      const sum = validGrades.reduce((total, grade) => total + (grade.grade_value as number), 0)
-      averages[subject] = validGrades.length > 0 ? (sum / validGrades.length).toFixed(1) : "0.0"
-    })
-    return averages
-  }
+      const subjectGrades = filteredGrades.filter((grade) => grade.course_name === subject);
+      const validGrades = subjectGrades.filter(grade => grade.grade_value != null && typeof grade.grade_value === 'number');
+      const sum = validGrades.reduce((total, grade) => total + (grade.grade_value as number), 0);
+      averages[subject] = validGrades.length > 0 ? (sum / validGrades.length).toFixed(1) : "0.0";
+    });
+    return averages;
+  };
 
-  const subjectAverages = calculateSubjectAverages()
+  const subjectAverages = calculateSubjectAverages();
 
   // Si está cargando autenticación
   if (loadingAuth) {
     return (
-      <MainLayout userRole="student" userName={user.name} userEmail={user.email}>
+      <MainLayout
+        userRole="student"
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@estudiante.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
+      >
         <div className="flex flex-col items-center justify-center h-[50vh]">
           <p className="text-xl">Verificando autenticación...</p>
         </div>
       </MainLayout>
-    )
+    );
+  }
+
+  // Si hay error de autenticación
+  if (authError) {
+    return (
+      <MainLayout
+        userRole="student"
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@estudiante.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
+      >
+        <div className="flex flex-col items-center justify-center h-[50vh]">
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{authError}</AlertDescription>
+          </Alert>
+          <Button asChild className="mt-4">
+            <Link href="/login">Volver al Login</Link>
+          </Button>
+        </div>
+      </MainLayout>
+    );
   }
 
   // Si está cargando datos
   if (loadingData) {
     return (
-      <MainLayout userRole="student" userName={user.name} userEmail={user.email}>
+      <MainLayout
+        userRole="student"
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@estudiante.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
+      >
         <div className="flex flex-col items-center justify-center h-[50vh]">
           <p className="text-xl">Cargando calificaciones...</p>
         </div>
       </MainLayout>
-    )
+    );
   }
 
-  // Si hay error
+  // Si hay error de datos
   if (error) {
     return (
-      <MainLayout userRole="student" userName={user.name} userEmail={user.email}>
+      <MainLayout
+        userRole="student"
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@estudiante.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
+      >
         <div className="flex flex-col items-center justify-center h-[50vh]">
-          <h1 className="text-2xl font-bold">{error}</h1>
-          <p className="text-muted-foreground mt-2">Ocurrió un problema al cargar las calificaciones.</p>
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
           <Button asChild className="mt-4">
             <Link href="/student">Volver al Dashboard</Link>
           </Button>
         </div>
       </MainLayout>
-    )
+    );
   }
 
   return (
-    <MainLayout userRole="student" userName={user.name} userEmail={user.email}>
+    <MainLayout
+      userRole="student"
+      userName={user?.name || "Cargando..."}
+      userEmail={user?.email || "cargando@estudiante.edu"}
+      profilePhotoUrl={user?.profilePhotoUrl || null}
+    >
       <div className="flex flex-col gap-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
@@ -348,5 +362,5 @@ export default function StudentGradesPage() {
         </Card>
       </div>
     </MainLayout>
-  )
+  );
 }
