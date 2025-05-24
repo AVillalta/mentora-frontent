@@ -1,11 +1,11 @@
-"use client"
+"use client";
 
-import { useState, useEffect, ChangeEvent } from "react"
-import api from "@/lib/api"
-import MainLayout from "@/components/layout/main-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect, ChangeEvent } from "react";
+import api from "@/lib/api";
+import MainLayout from "@/components/layout/main-layout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -14,119 +14,82 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Calendar, ChevronDown, Edit, Plus, Search, Trash } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { AxiosError } from "axios"
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Calendar, ChevronDown, Edit, Plus, Search, Trash, AlertCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { AxiosError } from "axios";
+import useAuth from "@/hooks/useAuth";
 
 // Definir tipo para los eventos del calendario
 interface CalendarEvent {
-  date: string
-  description: string
+  date: string;
+  description: string;
 }
 
 interface Semester {
-  id: string
-  name: string
-  start_date: string
-  end_date: string
-  calendar: CalendarEvent[] | null
-  is_active: boolean
-  courses_count: number
-  enrollments_count: number
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  calendar: CalendarEvent[] | null;
+  is_active: boolean;
+  courses_count: number;
+  enrollments_count: number;
 }
 
 interface ApiErrorResponse {
-  message: string
+  message: string;
 }
 
 export default function AdminSemestersPage() {
-  const router = useRouter()
-  const [token, setToken] = useState<string | null>(
-    typeof window !== "undefined" ? localStorage.getItem("token") : null
-  )
-  const [loadingAuth, setLoadingAuth] = useState(true)
-  const [authError, setAuthError] = useState<string | null>(null)
-  const [semesters, setSemesters] = useState<Semester[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [userName, setUserName] = useState("Cargando...")
-  const [userEmail, setUserEmail] = useState("cargando@mentora.edu")
-  const [searchTerm, setSearchTerm] = useState("")
-  const [showInactive, setShowInactive] = useState(false)
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [selectedSemester, setSelectedSemester] = useState<Semester | null>(null)
+  const router = useRouter();
+  const { user, loading: loadingAuth, error: authError } = useAuth("admin");
+  const [semesters, setSemesters] = useState<Semester[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedSemester, setSelectedSemester] = useState<Semester | null>(null);
 
   const [semesterFormData, setSemesterFormData] = useState<{
-    name: string
-    start_date: string
-    end_date: string
-    calendar: CalendarEvent[]
-    is_active: boolean
+    name: string;
+    start_date: string;
+    end_date: string;
+    calendar: CalendarEvent[];
+    is_active: boolean;
   }>({
     name: "",
     start_date: "",
     end_date: "",
     calendar: [],
     is_active: false,
-  })
-
-  // Verificar autenticación
-  useEffect(() => {
-    if (!token) {
-      setAuthError("No estás autenticado. Redirigiendo al login...")
-      router.push("/login")
-      return
-    }
-
-    const verifyUser = async () => {
-      try {
-        const response = await api.get("/user")
-        const { role, name, email } = response.data.data
-        if (role !== "admin") {
-          setAuthError("Acceso denegado. Redirigiendo al login...")
-          localStorage.removeItem("token")
-          router.push("/login")
-          return
-        }
-        setUserName(name || "Admin Sistema")
-        setUserEmail(email || "admin@mentora.edu")
-        setLoadingAuth(false)
-      } catch (err) {
-        setAuthError("Token inválido. Redirigiendo al login...")
-        localStorage.removeItem("token")
-        router.push("/login")
-      }
-    }
-
-    verifyUser()
-  }, [token, router])
+  });
 
   // Cargar semestres
   useEffect(() => {
+    if (loadingAuth || authError) return;
+
     const fetchSemesters = async () => {
-      if (loadingAuth || authError) return
-
       try {
-        setLoading(true)
-        const response = await api.get("/semesters")
-        console.log("Semesters response:", response.data)
-        setSemesters(response.data.data || [])
+        setLoading(true);
+        const response = await api.get("/semesters");
+        setSemesters(response.data.data || []);
       } catch (err: unknown) {
-        const error = err as AxiosError<ApiErrorResponse>
-        console.error("API error:", error.response?.data || error.message)
-        setError(error.response?.data?.message || "Error al cargar los semestres. Inténtalo de nuevo.")
+        const error = err as AxiosError<ApiErrorResponse>;
+        setError(error.response?.data?.message || "Error al cargar los semestres. Inténtalo de nuevo.");
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    fetchSemesters()
-  }, [loadingAuth, authError])
+    fetchSemesters();
+  }, [loadingAuth, authError]);
 
   // Manejar creación de semestre
   const handleCreateSemester = async () => {
@@ -137,27 +100,27 @@ export default function AdminSemestersPage() {
         end_date: semesterFormData.end_date,
         calendar: semesterFormData.calendar,
         is_active: semesterFormData.is_active,
-      })
-      setIsCreateDialogOpen(false)
+      });
+      setIsCreateDialogOpen(false);
       setSemesterFormData({
         name: "",
         start_date: "",
         end_date: "",
         calendar: [],
         is_active: false,
-      })
-      const response = await api.get("/semesters")
-      setSemesters(response.data.data || [])
-      setError(null)
+      });
+      const response = await api.get("/semesters");
+      setSemesters(response.data.data || []);
+      setError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      setError(error.response?.data?.message || "Error al crear el semestre. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      setError(error.response?.data?.message || "Error al crear el semestre. Inténtalo de nuevo.");
     }
-  }
+  };
 
   // Manejar edición de semestre
   const handleEditSemester = async () => {
-    if (!selectedSemester) return
+    if (!selectedSemester) return;
     try {
       await api.put(`/semesters/${selectedSemester.id}`, {
         name: semesterFormData.name,
@@ -165,60 +128,72 @@ export default function AdminSemestersPage() {
         end_date: semesterFormData.end_date,
         calendar: semesterFormData.calendar,
         is_active: semesterFormData.is_active,
-      })
-      setIsEditDialogOpen(false)
+      });
+      setIsEditDialogOpen(false);
       setSemesterFormData({
         name: "",
         start_date: "",
         end_date: "",
         calendar: [],
         is_active: false,
-      })
-      setSelectedSemester(null)
-      const response = await api.get("/semesters")
-      setSemesters(response.data.data || [])
-      setError(null)
+      });
+      setSelectedSemester(null);
+      const response = await api.get("/semesters");
+      setSemesters(response.data.data || []);
+      setError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      setError(error.response?.data?.message || "Error al editar el semestre. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      setError(error.response?.data?.message || "Error al editar el semestre. Inténtalo de nuevo.");
     }
-  }
+  };
 
   // Manejar eliminación de semestre
   const handleDeleteSemester = async (id: string) => {
     try {
-      await api.delete(`/semesters/${id}`)
-      const response = await api.get("/semesters")
-      setSemesters(response.data.data || [])
-      setError(null)
+      await api.delete(`/semesters/${id}`);
+      const response = await api.get("/semesters");
+      setSemesters(response.data.data || []);
+      setError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      setError(error.response?.data?.message || "Error al eliminar el semestre. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      setError(error.response?.data?.message || "Error al eliminar el semestre. Inténtalo de nuevo.");
     }
-  }
+  };
 
   // Manejar clic en editar
   const handleEditClick = (semester: Semester) => {
-    setSelectedSemester(semester)
+    setSelectedSemester(semester);
     setSemesterFormData({
       name: semester.name || "",
       start_date: semester.start_date || "",
       end_date: semester.end_date || "",
       calendar: semester.calendar || [],
       is_active: semester.is_active || false,
-    })
-    setIsEditDialogOpen(true)
-  }
+    });
+    setIsEditDialogOpen(true);
+  };
 
   // Filtrar semestres
   const filteredSemesters = semesters.filter((semester) => {
-    const matchesSearch = (semester.name || "").toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = showInactive || semester.is_active
-    return matchesSearch && matchesStatus
-  })
+    const matchesSearch = (semester.name || "").toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = showInactive || semester.is_active;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Ajustar la URL de la foto de perfil para el MainLayout
+  const profilePhotoUrl = user?.profilePhotoUrl
+    ? user.profilePhotoUrl.startsWith("http")
+      ? user.profilePhotoUrl
+      : `http://localhost:80${user.profilePhotoUrl}`
+    : null;
 
   return (
-    <MainLayout userRole="admin" userName={userName} userEmail={userEmail}>
+    <MainLayout
+      userRole={user?.role || "admin"}
+      userName={user?.name || "Cargando..."}
+      userEmail={user?.email || "cargando@mentora.edu"}
+      profilePhotoUrl={profilePhotoUrl}
+    >
       <div className="flex flex-col gap-6 p-4">
         {loadingAuth ? (
           <div className="text-center">Verificando autenticación...</div>
@@ -226,10 +201,15 @@ export default function AdminSemestersPage() {
           <div className="text-red-500 text-center">{authError}</div>
         ) : loading ? (
           <div className="text-center">Cargando...</div>
-        ) : error ? (
-          <div className="text-red-500 text-center">{error}</div>
         ) : (
           <>
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <h1 className="text-3xl font-bold tracking-tight">Semestres</h1>
@@ -456,5 +436,5 @@ export default function AdminSemestersPage() {
         )}
       </div>
     </MainLayout>
-  )
+  );
 }
