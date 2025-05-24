@@ -389,7 +389,7 @@ export default function ProfessorDashboard() {
           <TabsContent value="courses" className="space-y-4">
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {courseStats.map((course) => (
-                <Link href={`/teacher/courses/${course.id}`} key={course.id} className="block">
+                <Link href={`/professor/courses/${course.id}`} key={course.id} className="block">
                   <Card className="h-full overflow-hidden transition-all hover:shadow-md">
                     <div className={`aspect-video w-full bg-gradient-to-r ${course.gradient} flex items-center justify-center transition-all hover:scale-105`}>
                       <Book className="h-16 w-16 text-white opacity-80" />
