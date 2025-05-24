@@ -1,16 +1,16 @@
-"use client"
+"use client";
 
-import { useState, useEffect, ChangeEvent } from "react"
-import { useRouter } from "next/navigation"
-import api from "@/lib/api"
-import MainLayout from "@/components/layout/main-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
+import { useState, useEffect, ChangeEvent } from "react";
+import { useRouter } from "next/navigation";
+import api from "@/lib/api";
+import MainLayout from "@/components/layout/main-layout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   Book,
   Calendar,
@@ -25,190 +25,150 @@ import {
   File as FilePdf,
   FileSpreadsheet,
   Upload,
-} from "lucide-react"
-import Link from "next/link"
+} from "lucide-react";
+import Link from "next/link";
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import { AxiosError } from "axios"
+} from "@/components/ui/breadcrumb";
+import { AxiosError } from "axios";
+import useAuth from "@/hooks/useAuth";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 interface Content {
-  id: string
-  name: string
-  description: string
-  bibliography?: string
-  order: number
-  file_path?: string
-  type: string
-  format: string
-  size: number
-  views: number
-  downloads: number
-  duration?: string
-  course_id: string
-  course: string
-  created_at: string
-  updated_at: string
+  id: string;
+  name: string;
+  description: string;
+  bibliography?: string;
+  order: number;
+  file_path?: string;
+  type: string;
+  format: string;
+  size: number;
+  views: number;
+  downloads: number;
+  duration?: string;
+  course_id: string;
+  course: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface Assignment {
-  id: string
-  title: string
-  description: string
-  course_id: string
-  course: string
-  due_date: string
-  points: number
-  submissions: number
-  total_students: number
-  submissions_files: { id: string; file_name: string; url: string; size: number; student_id: string; created_at: string }[]
-  created_at: string
-  updated_at: string
+  id: string;
+  title: string;
+  description: string;
+  course_id: string;
+  course: string;
+  due_date: string;
+  points: number;
+  submissions: number;
+  total_students: number;
+  submissions_files: { id: string; file_name: string; url: string; size: number; student_id: string; created_at: string }[];
+  created_at: string;
+  updated_at: string;
 }
 
 interface ApiErrorResponse {
-  message?: string
-  data?: string
-  errors?: { [key: string]: string[] }
+  message?: string;
+  data?: string;
+  errors?: { [key: string]: string[] };
 }
 
 export default function StudentContentsPage() {
-  const router = useRouter()
-  const [token, setToken] = useState<string | null>(
-    typeof window !== "undefined" ? localStorage.getItem("token") : null
-  )
-  const [loadingAuth, setLoadingAuth] = useState(true)
-  const [authError, setAuthError] = useState<string | null>(null)
-  const [contents, setContents] = useState<Content[]>([])
-  const [assignments, setAssignments] = useState<Assignment[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [userName, setUserName] = useState("Cargando...")
-  const [userEmail, setUserEmail] = useState("cargando@estudiante.edu")
-  const [userId, setUserId] = useState<string | null>(null)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [isAssignmentDialogOpen, setIsAssignmentDialogOpen] = useState(false)
-  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null)
-  const [submissionFile, setSubmissionFile] = useState<File | null>(null)
-
-  // Verificar autenticación
-  useEffect(() => {
-    if (!token) {
-      setAuthError("No estás autenticado. Redirigiendo al login...")
-      router.push("/login")
-      return
-    }
-
-    const verifyUser = async () => {
-      try {
-        console.log("Verificando usuario...")
-        const response = await api.get("/user")
-        const { role, name, email, id } = response.data.data
-        console.log("Usuario verificado:", { role, name, email, id })
-        if (role !== "student") {
-          setAuthError("Acceso denegado. Redirigiendo al login...")
-          localStorage.removeItem("token")
-          router.push("/login")
-          return
-        }
-        setUserName(name || "Estudiante")
-        setUserEmail(email || "estudiante@estudiante.edu")
-        setUserId(id)
-        setLoadingAuth(false)
-      } catch (err: unknown) {
-        const error = err as AxiosError<ApiErrorResponse>
-        console.error("Error al verificar usuario:", error.response?.data || error.message)
-        setAuthError(error.response?.data?.message || "Token inválido. Redirigiendo al login...")
-        localStorage.removeItem("token")
-        router.push("/login")
-      }
-    }
-
-    verifyUser()
-  }, [token, router])
+  const router = useRouter();
+  const { user, loading: loadingAuth, error: authError } = useAuth("student");
+  const [contents, setContents] = useState<Content[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isAssignmentDialogOpen, setIsAssignmentDialogOpen] = useState(false);
+  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
+  const [submissionFile, setSubmissionFile] = useState<File | null>(null);
 
   // Fetch de contenidos y tareas
   useEffect(() => {
-    if (loadingAuth || authError) return
+    if (loadingAuth || authError) return;
 
     const fetchData = async () => {
       try {
-        setLoading(true)
-        console.log("Iniciando fetch de datos...")
+        setLoading(true);
+        console.log("Iniciando fetch de datos...");
         const [contentsRes, assignmentsRes] = await Promise.all([
           api.get("/contents", { timeout: 10000 }),
           api.get("/assignments", { timeout: 10000 }),
-        ])
-        console.log("Respuesta de /contents:", contentsRes.data)
-        console.log("Respuesta de /assignments:", assignmentsRes.data)
-        setContents(contentsRes.data.data || [])
-        setAssignments(assignmentsRes.data.data || [])
-        setError(null)
+        ]);
+        console.log("Respuesta de /contents:", contentsRes.data);
+        console.log("Respuesta de /assignments:", assignmentsRes.data);
+        setContents(contentsRes.data.data || []);
+        setAssignments(assignmentsRes.data.data || []);
+        setError(null);
       } catch (err: unknown) {
-        const error = err as AxiosError<ApiErrorResponse>
-        console.error("Error al cargar datos:", error.response?.data || error.message)
-        setError(error.response?.data?.message || "Error al cargar los datos. Inténtalo de nuevo.")
+        const error = err as AxiosError<ApiErrorResponse>;
+        console.error("Error al cargar datos:", error.response?.data || error.message);
+        setError(error.response?.data?.message || "Error al cargar los datos. Inténtalo de nuevo.");
       } finally {
-        setLoading(false)
-        console.log("Fetch de datos completado, loading:", false)
+        setLoading(false);
+        console.log("Fetch de datos completado, loading:", false);
       }
-    }
+    };
 
-    fetchData()
-  }, [loadingAuth, authError])
+    fetchData();
+  }, [loadingAuth, authError]);
 
   // Funciones auxiliares
   const handleViewDetails = (assignment: Assignment) => {
-    setSelectedAssignment(assignment)
-    setSubmissionFile(null)
-    setIsAssignmentDialogOpen(true)
-    console.log("Selected assignment:", assignment)
-    console.log("Has submitted:", hasSubmitted(assignment))
-    console.log("Is past due:", isPastDue(assignment.due_date))
-  }
+    setSelectedAssignment(assignment);
+    setSubmissionFile(null);
+    setIsAssignmentDialogOpen(true);
+    console.log("Selected assignment:", assignment);
+    console.log("Has submitted:", hasSubmitted(assignment));
+    console.log("Is past due:", isPastDue(assignment.due_date));
+  };
 
   const handleSubmitAssignment = async () => {
-    if (!selectedAssignment || !submissionFile) return
+    if (!selectedAssignment || !submissionFile) return;
 
     try {
-      const formData = new FormData()
-      formData.append("file", submissionFile)
+      const formData = new FormData();
+      formData.append("file", submissionFile);
 
       await api.post(`/assignments/${selectedAssignment.id}/submit`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
-      })
+      });
 
-      setIsAssignmentDialogOpen(false)
-      setSubmissionFile(null)
-      alert("Entrega enviada con éxito")
+      setIsAssignmentDialogOpen(false);
+      setSubmissionFile(null);
+      alert("Entrega enviada con éxito");
 
       // Actualizar la lista de tareas
-      const response = await api.get("/assignments")
-      setAssignments(response.data.data || [])
+      const response = await api.get("/assignments");
+      setAssignments(response.data.data || []);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      console.error("Error al enviar entrega:", error.response?.data || error.message)
-      setError(error.response?.data?.message || "Error al enviar la entrega. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      console.error("Error al enviar entrega:", error.response?.data || error.message);
+      setError(error.response?.data?.message || "Error al enviar la entrega. Inténtalo de nuevo.");
     }
-  }
+  };
 
   const filteredContents = contents.filter(
     (content) =>
       content.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       content.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       content.course.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  );
 
   const filteredAssignments = assignments.filter(
     (assignment) =>
       assignment.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       assignment.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       assignment.course.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  );
 
   const getFileIcon = (type: string, format: string) => {
     switch (type) {
@@ -217,91 +177,126 @@ export default function StudentContentsPage() {
           <FilePdf className="h-10 w-10 text-red-500" />
         ) : (
           <FileText className="h-10 w-10 text-blue-500" />
-        )
+        );
       case "presentation":
-        return <FileImage className="h-10 w-10 text-orange-500" />
+        return <FileImage className="h-10 w-10 text-orange-500" />;
       case "video":
-        return <Film className="h-10 w-10 text-purple-500" />
+        return <Film className="h-10 w-10 text-purple-500" />;
       case "code":
-        return <FileCode className="h-10 w-10 text-green-500" />
+        return <FileCode className="h-10 w-10 text-green-500" />;
       case "spreadsheet":
-        return <FileSpreadsheet className="h-10 w-10 text-green-500" />
+        return <FileSpreadsheet className="h-10 w-10 text-green-500" />;
       default:
-        return <FileText className="h-10 w-10 text-gray-500" />
+        return <FileText className="h-10 w-10 text-gray-500" />;
     }
-  }
+  };
 
   const isNewContent = (createdAt: string) => {
-    const createdDate = new Date(createdAt)
-    const now = new Date()
-    const diffDays = (now.getTime() - createdDate.getTime()) / (1000 * 3600 * 24)
-    return diffDays <= 7
-  }
+    const createdDate = new Date(createdAt);
+    const now = new Date();
+    const diffDays = (now.getTime() - createdDate.getTime()) / (1000 * 3600 * 24);
+    return diffDays <= 7;
+  };
 
   const hasSubmitted = (assignment: Assignment) => {
     const submitted = Array.isArray(assignment.submissions_files) && assignment.submissions_files.some(
-      (submission) => submission.student_id === userId
-    )
-    console.log("hasSubmitted:", submitted, "submissions_files:", assignment.submissions_files, "userId:", userId)
-    return submitted
-  }
+      (submission) => submission.student_id === user?.id
+    );
+    console.log("hasSubmitted:", submitted, "submissions_files:", assignment.submissions_files, "userId:", user?.id);
+    return submitted;
+  };
 
   const isPastDue = (dueDate: string) => {
-    const pastDue = new Date(dueDate) < new Date()
-    console.log("isPastDue:", pastDue, "due_date:", dueDate)
-    return pastDue
-  }
+    const pastDue = new Date(dueDate) < new Date();
+    console.log("isPastDue:", pastDue, "due_date:", dueDate);
+    return pastDue;
+  };
 
   // Si está cargando autenticación
   if (loadingAuth) {
     return (
-      <MainLayout userRole="student" userName={userName} userEmail={userEmail}>
+      <MainLayout
+        userRole="student"
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@estudiante.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
+      >
         <div className="flex flex-col items-center justify-center h-[50vh]">
           <p className="text-xl">Verificando autenticación...</p>
         </div>
       </MainLayout>
-    )
+    );
   }
 
   // Si hay error de autenticación
   if (authError) {
     return (
-      <MainLayout userRole="student" userName={userName} userEmail={userEmail}>
+      <MainLayout
+        userRole="student"
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@estudiante.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
+      >
         <div className="flex flex-col items-center justify-center h-[50vh]">
-          <p className="text-red-500 text-xl">{authError}</p>
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{authError}</AlertDescription>
+          </Alert>
+          <Button asChild className="mt-4">
+            <Link href="/login">Volver al Login</Link>
+          </Button>
         </div>
       </MainLayout>
-    )
+    );
   }
 
   // Si está cargando datos
   if (loading) {
     return (
-      <MainLayout userRole="student" userName={userName} userEmail={userEmail}>
+      <MainLayout
+        userRole="student"
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@estudiante.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
+      >
         <div className="flex flex-col items-center justify-center h-[50vh]">
           <p className="text-xl">Cargando contenidos...</p>
         </div>
       </MainLayout>
-    )
+    );
   }
 
   // Si hay error
   if (error) {
     return (
-      <MainLayout userRole="student" userName={userName} userEmail={userEmail}>
+      <MainLayout
+        userRole="student"
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@estudiante.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
+      >
         <div className="flex flex-col items-center justify-center h-[50vh]">
-          <h1 className="text-2xl font-bold">{error}</h1>
-          <p className="text-muted-foreground mt-2">Ocurrió un problema al cargar los contenidos.</p>
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
           <Button asChild className="mt-4">
             <Link href="/student">Volver al Dashboard</Link>
           </Button>
         </div>
       </MainLayout>
-    )
+    );
   }
 
   return (
-    <MainLayout userRole="student" userName={userName} userEmail={userEmail}>
+    <MainLayout
+      userRole="student"
+      userName={user?.name || "Cargando..."}
+      userEmail={user?.email || "cargando@estudiante.edu"}
+      profilePhotoUrl={user?.profilePhotoUrl || null}
+    >
       <div className="flex flex-col gap-6 p-4">
         {/* Breadcrumbs */}
         <Breadcrumb className="mb-2">
@@ -493,7 +488,7 @@ export default function StudentContentsPage() {
                                     <p className="text-sm text-green-600">
                                       Ya has enviado una entrega: {
                                         selectedAssignment.submissions_files.find(
-                                          (s) => s.student_id === userId
+                                          (s) => s.student_id === user?.id
                                         )?.file_name || "Archivo enviado"
                                       }
                                     </p>
@@ -519,8 +514,8 @@ export default function StudentContentsPage() {
                               <Button
                                 variant="outline"
                                 onClick={() => {
-                                  setIsAssignmentDialogOpen(false)
-                                  setSubmissionFile(null)
+                                  setIsAssignmentDialogOpen(false);
+                                  setSubmissionFile(null);
                                 }}
                               >
                                 Cerrar
@@ -543,5 +538,5 @@ export default function StudentContentsPage() {
         </Tabs>
       </div>
     </MainLayout>
-  )
+  );
 }
