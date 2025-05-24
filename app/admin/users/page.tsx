@@ -1,11 +1,11 @@
-"use client"
+"use client";
 
-import { useState, useEffect, ChangeEvent, FormEvent, useRef } from "react"
-import api from "@/lib/api"
-import MainLayout from "@/components/layout/main-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect, ChangeEvent, FormEvent, useRef } from "react";
+import api from "@/lib/api";
+import MainLayout from "@/components/layout/main-layout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -14,116 +14,112 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { ChevronDown, Edit, Plus, Search, Trash, AlertCircle, Info } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { AxiosError } from "axios"
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ChevronDown, Edit, Plus, Search, Trash, AlertCircle, Info } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { AxiosError } from "axios";
+import useAuth from "@/hooks/useAuth";
 
 interface User {
-  id: string
-  name: string
-  email: string
-  phone_number: string
-  document: string
-  city: string
-  postal_code: string
-  address: string
-  date_of_birth: string
-  country_id: string
-  country: string
-  role: string
-  created_at: string
-  updated_at: string
+  id: string;
+  name: string;
+  email: string;
+  phone_number: string;
+  document: string;
+  city: string;
+  postal_code: string;
+  address: string;
+  date_of_birth: string;
+  country_id: string;
+  country: string;
+  role: string;
+  created_at: string;
+  updated_at: string;
+  profile_photo_url: string | null;
 }
 
 interface UserFormData {
-  name: string
-  email: string
-  password: string
-  confirmPassword: string
-  phone_number: string
-  document: string
-  city: string
-  postal_code: string
-  address: string
-  date_of_birth: string
-  country_id: string
-  role: string
+  name: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  phone_number: string;
+  document: string;
+  city: string;
+  postal_code: string;
+  address: string;
+  date_of_birth: string;
+  country_id: string;
+  role: string;
 }
 
 interface UserCreatePayload {
-  name: string
-  email: string
-  password: string
-  password_confirmation: string
-  phone_number: string
-  document: string
-  city: string
-  postal_code: string
-  address: string
-  date_of_birth: string
-  country_id: string
-  role: string
+  name: string;
+  email: string;
+  password: string;
+  password_confirmation: string;
+  phone_number: string;
+  document: string;
+  city: string;
+  postal_code: string;
+  address: string;
+  date_of_birth: string;
+  country_id: string;
+  role: string;
 }
 
 interface UserUpdatePayload {
-  name: string
-  email: string
-  password?: string
-  password_confirmation?: string
-  phone_number?: string
-  document?: string
-  city?: string
-  postal_code?: string
-  address?: string
-  date_of_birth?: string
-  country_id?: string
-  role?: string
+  name: string;
+  email: string;
+  password?: string;
+  password_confirmation?: string;
+  phone_number?: string;
+  document?: string;
+  city?: string;
+  postal_code?: string;
+  address?: string;
+  date_of_birth?: string;
+  country_id?: string;
+  role?: string;
 }
 
 interface Country {
-  id: string
-  name: string
-  code: string
+  id: string;
+  name: string;
+  code: string;
 }
 
 interface ApiErrorResponse {
-  message: string
-  errors?: { [key: string]: string[] }
+  message: string;
+  errors?: { [key: string]: string[] };
 }
 
 // Función para formatear la fecha ISO a yyyy-MM-dd
 const formatDateForInput = (isoDate: string): string => {
   if (!isoDate) return "";
   return isoDate.split("T")[0]; // Convierte "1975-05-15T00:00:00.000000Z" a "1975-05-15"
-}
+};
 
 export default function AdminUsersPage() {
-  const router = useRouter()
-  const [token, setToken] = useState<string | null>(
-    typeof window !== "undefined" ? localStorage.getItem("token") : null
-  )
-  const [loadingAuth, setLoadingAuth] = useState(true)
-  const [authError, setAuthError] = useState<string | null>(null)
-  const [users, setUsers] = useState<User[]>([])
-  const [countries, setCountries] = useState<Country[]>([])
-  const [loading, setLoading] = useState(true)
-  const [apiError, setApiError] = useState<string | null>(null)
-  const [formError, setFormError] = useState<string | null>(null)
-  const [userName, setUserName] = useState("Cargando...")
-  const [userEmail, setUserEmail] = useState("cargando@mentora.edu")
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedRole, setSelectedRole] = useState("all")
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [selectedUser, setSelectedUser] = useState<User | null>(null)
-  const createDialogRef = useRef<HTMLDivElement>(null)
-  const editDialogRef = useRef<HTMLDivElement>(null)
+  const router = useRouter();
+  const { user, loading: loadingAuth, error: authError } = useAuth("admin");
+  const [users, setUsers] = useState<User[]>([]);
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRole, setSelectedRole] = useState("all");
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const createDialogRef = useRef<HTMLDivElement>(null);
+  const editDialogRef = useRef<HTMLDivElement>(null);
 
   const [userFormData, setUserFormData] = useState<UserFormData>({
     name: "",
@@ -138,124 +134,70 @@ export default function AdminUsersPage() {
     date_of_birth: "",
     country_id: "",
     role: "student",
-  })
+  });
 
   // Configurar timeout para solicitudes API
   const apiWithTimeout = async (url: string, timeoutMs: number = 10000) => {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await api.get(url, { signal: controller.signal })
-      clearTimeout(timeoutId)
-      return response
+      const response = await api.get(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      return response;
     } catch (err) {
-      clearTimeout(timeoutId)
-      throw err
+      clearTimeout(timeoutId);
+      throw err;
     }
-  }
-
-  // Verificar autenticación
-  useEffect(() => {
-    console.log("Iniciando verificación de autenticación...")
-    if (!token) {
-      console.log("No hay token, redirigiendo al login")
-      setAuthError("No estás autenticado. Redirigiendo al login...")
-      router.push("/login")
-      return
-    }
-
-    const verifyUser = async () => {
-      try {
-        console.log("Haciendo solicitud a /user")
-        const response = await apiWithTimeout("/user")
-        console.log("Respuesta de /user:", response.data)
-        const { role, name, email } = response.data.data
-        if (role !== "admin") {
-          console.log("Rol no es admin, redirigiendo al login")
-          setAuthError("Acceso denegado. Redirigiendo al login...")
-          localStorage.removeItem("token")
-          router.push("/login")
-          return
-        }
-        setUserName(name || "Admin Sistema")
-        setUserEmail(email || "admin@mentora.edu")
-        setLoadingAuth(false)
-        console.log("Autenticación completada, loadingAuth: false")
-      } catch (err) {
-        console.error("Error en autenticación:", err)
-        setAuthError("Token inválido. Redirigiendo al login...")
-        localStorage.removeItem("token")
-        router.push("/login")
-      }
-    }
-
-    verifyUser()
-  }, [token, router])
+  };
 
   // Cargar usuarios y países
   useEffect(() => {
-    console.log("Iniciando carga de datos, loadingAuth:", loadingAuth, "authError:", authError)
-    if (loadingAuth || authError) {
-      console.log("No se carga datos, esperando autenticación")
-      return
-    }
+    if (loadingAuth || authError) return;
 
     const fetchData = async () => {
       try {
-        setLoading(true)
-        console.log("Haciendo solicitudes a /users y /countries")
+        setLoading(true);
         const [usersRes, countriesRes] = await Promise.all([
-          apiWithTimeout("/users").catch((err) => {
-            console.error("Error en /users:", err)
-            throw err
-          }),
-          apiWithTimeout("/countries").catch((err) => {
-            console.error("Error en /countries:", err)
-            return { data: { data: [] } }
-          }),
-        ])
-        console.log("Users response:", usersRes.data)
-        console.log("Countries response:", countriesRes.data)
-        setUsers(usersRes.data.data || [])
-        setCountries(countriesRes.data.data || [])
+          apiWithTimeout("/users"),
+          apiWithTimeout("/countries"),
+        ]);
+        setUsers(usersRes.data.data || []);
+        setCountries(countriesRes.data.data || []);
         if (!countriesRes.data.data.length) {
-          setApiError("No se pudieron cargar los países. Inténtalo de nuevo.")
+          setApiError("No se pudieron cargar los países. Inténtalo de nuevo.");
         }
       } catch (err: unknown) {
-        const error = err as AxiosError<ApiErrorResponse>
-        console.error("API error:", error.response?.data || error.message)
-        setApiError(error.response?.data?.message || "Error al cargar los datos. Inténtalo de nuevo.")
+        const error = err as AxiosError<ApiErrorResponse>;
+        setApiError(error.response?.data?.message || "Error al cargar los datos. Inténtalo de nuevo.");
       } finally {
-        setLoading(false)
-        console.log("Carga completada, loading: false")
+        setLoading(false);
       }
-    }
+    };
 
-    fetchData()
-  }, [loadingAuth, authError])
+    fetchData();
+  }, [loadingAuth, authError]);
 
   // Desplazar diálogo hacia arriba cuando haya un error
   useEffect(() => {
     if (formError && isCreateDialogOpen && createDialogRef.current) {
-      createDialogRef.current.scrollTop = 0
+      createDialogRef.current.scrollTop = 0;
     }
     if (formError && isEditDialogOpen && editDialogRef.current) {
-      editDialogRef.current.scrollTop = 0
+      editDialogRef.current.scrollTop = 0;
     }
-  }, [formError, isCreateDialogOpen, isEditDialogOpen])
+  }, [formError, isCreateDialogOpen, isEditDialogOpen]);
 
   // Manejar creación de usuario
   const handleCreateUser = async (event: FormEvent) => {
-    event.preventDefault()
-    setFormError(null)
+    event.preventDefault();
+    setFormError(null);
 
     if (userFormData.password !== userFormData.confirmPassword) {
-      setFormError("Las contraseñas no coinciden.")
-      return
+      setFormError("Las contraseñas no coinciden.");
+      return;
     }
 
     try {
-      console.log("Creando usuario con datos:", userFormData)
       const payload: UserCreatePayload = {
         name: userFormData.name,
         email: userFormData.email,
@@ -269,9 +211,9 @@ export default function AdminUsersPage() {
         date_of_birth: userFormData.date_of_birth,
         country_id: userFormData.country_id,
         role: userFormData.role,
-      }
-      await api.post("/users", payload)
-      setIsCreateDialogOpen(false)
+      };
+      await api.post("/users", payload);
+      setIsCreateDialogOpen(false);
       setUserFormData({
         name: "",
         email: "",
@@ -285,35 +227,32 @@ export default function AdminUsersPage() {
         date_of_birth: "",
         country_id: "",
         role: "student",
-      })
-      setFormError(null)
-      const response = await apiWithTimeout("/users")
-      setUsers(response.data.data || [])
-      setApiError(null)
-      console.log("Usuario creado, datos actualizados")
+      });
+      setFormError(null);
+      const response = await apiWithTimeout("/users");
+      setUsers(response.data.data || []);
+      setApiError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      console.error("Error al crear usuario:", error.response?.data || error.message)
+      const error = err as AxiosError<ApiErrorResponse>;
       const errorMessages = error.response?.data?.errors
         ? Object.values(error.response.data.errors).flat().join(" ")
-        : error.response?.data?.message || "Error al crear el usuario. Inténtalo de nuevo."
-      setFormError(errorMessages)
+        : error.response?.data?.message || "Error al crear el usuario. Inténtalo de nuevo.";
+      setFormError(errorMessages);
     }
-  }
+  };
 
   // Manejar edición de usuario
   const handleEditUser = async (event: FormEvent) => {
-    event.preventDefault()
-    setFormError(null)
+    event.preventDefault();
+    setFormError(null);
 
-    if (!selectedUser) return
+    if (!selectedUser) return;
     if (userFormData.password && userFormData.password !== userFormData.confirmPassword) {
-      setFormError("Las contraseñas no coinciden.")
-      return
+      setFormError("Las contraseñas no coinciden.");
+      return;
     }
 
     try {
-      console.log("Editando usuario con ID:", selectedUser.id, "datos:", userFormData)
       const updates: UserUpdatePayload = {
         name: userFormData.name,
         email: userFormData.email,
@@ -325,14 +264,14 @@ export default function AdminUsersPage() {
         date_of_birth: userFormData.date_of_birth,
         country_id: userFormData.country_id,
         role: userFormData.role,
-      }
+      };
       if (userFormData.password) {
-        updates.password = userFormData.password
-        updates.password_confirmation = userFormData.confirmPassword
+        updates.password = userFormData.password;
+        updates.password_confirmation = userFormData.confirmPassword;
       }
 
-      await api.put(`/users/${selectedUser.id}`, updates)
-      setIsEditDialogOpen(false)
+      await api.put(`/users/${selectedUser.id}`, updates);
+      setIsEditDialogOpen(false);
       setUserFormData({
         name: "",
         email: "",
@@ -346,43 +285,37 @@ export default function AdminUsersPage() {
         date_of_birth: "",
         country_id: "",
         role: "student",
-      })
-      setSelectedUser(null)
-      setFormError(null)
-      const response = await apiWithTimeout("/users")
-      setUsers(response.data.data || [])
-      setApiError(null)
-      console.log("Usuario editado, datos actualizados")
+      });
+      setSelectedUser(null);
+      setFormError(null);
+      const response = await apiWithTimeout("/users");
+      setUsers(response.data.data || []);
+      setApiError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      console.error("Error al editar usuario:", error.response?.data || error.message)
+      const error = err as AxiosError<ApiErrorResponse>;
       const errorMessages = error.response?.data?.errors
         ? Object.values(error.response.data.errors).flat().join(" ")
-        : error.response?.data?.message || "Error al editar el usuario. Inténtalo de nuevo."
-      setFormError(errorMessages)
+        : error.response?.data?.message || "Error al editar el usuario. Inténtalo de nuevo.";
+      setFormError(errorMessages);
     }
-  }
+  };
 
   // Manejar eliminación de usuario
   const handleDeleteUser = async (id: string) => {
     try {
-      console.log("Eliminando usuario con ID:", id)
-      await api.delete(`/users/${id}`)
-      const response = await apiWithTimeout("/users")
-      setUsers(response.data.data || [])
-      setApiError(null)
-      console.log("Usuario eliminado, datos actualizados")
+      await api.delete(`/users/${id}`);
+      const response = await apiWithTimeout("/users");
+      setUsers(response.data.data || []);
+      setApiError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      console.error("Error al eliminar usuario:", error.response?.data || error.message)
-      setApiError(error.response?.data?.message || "Error al eliminar el usuario. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      setApiError(error.response?.data?.message || "Error al eliminar el usuario. Inténtalo de nuevo.");
     }
-  }
+  };
 
   // Manejar clic en editar
   const handleEditClick = (user: User) => {
-    console.log("Abriendo edición para usuario:", user)
-    setSelectedUser(user)
+    setSelectedUser(user);
     setUserFormData({
       name: user.name || "",
       email: user.email || "",
@@ -393,25 +326,37 @@ export default function AdminUsersPage() {
       city: user.city || "",
       postal_code: user.postal_code || "",
       address: user.address || "",
-      date_of_birth: formatDateForInput(user.date_of_birth || ""), // Formatear la fecha
+      date_of_birth: formatDateForInput(user.date_of_birth || ""),
       country_id: user.country_id || "",
       role: user.role || "student",
-    })
-    setFormError(null)
-    setIsEditDialogOpen(true)
-  }
+    });
+    setFormError(null);
+    setIsEditDialogOpen(true);
+  };
 
   // Filtrar usuarios
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
       (user.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (user.email || "").toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesRole = selectedRole === "all" || user.role === selectedRole
-    return matchesSearch && matchesRole
-  })
+      (user.email || "").toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesRole = selectedRole === "all" || user.role === selectedRole;
+    return matchesSearch && matchesRole;
+  });
+
+  // Ajustar la URL de la foto de perfil para el MainLayout
+  const profilePhotoUrl = user?.profilePhotoUrl
+    ? user.profilePhotoUrl.startsWith("http")
+      ? user.profilePhotoUrl
+      : `http://localhost:80${user.profilePhotoUrl}`
+    : null;
 
   return (
-    <MainLayout userRole="admin" userName={userName} userEmail={userEmail}>
+    <MainLayout
+      userRole={user?.role || "admin"}
+      userName={user?.name || "Cargando..."}
+      userEmail={user?.email || "cargando@mentora.edu"}
+      profilePhotoUrl={profilePhotoUrl}
+    >
       <div className="flex flex-col gap-6 p-4">
         {loadingAuth ? (
           <div className="text-center">Verificando autenticación...</div>
@@ -436,8 +381,8 @@ export default function AdminUsersPage() {
               <Dialog
                 open={isCreateDialogOpen}
                 onOpenChange={(open) => {
-                  setIsCreateDialogOpen(open)
-                  if (!open) setFormError(null)
+                  setIsCreateDialogOpen(open);
+                  if (!open) setFormError(null);
                 }}
               >
                 <DialogTrigger asChild>
@@ -654,6 +599,16 @@ export default function AdminUsersPage() {
                           <td className="p-4 align-middle">
                             <div className="flex items-center gap-3">
                               <Avatar>
+                                {user.profile_photo_url && (
+                                  <AvatarImage
+                                    src={
+                                      user.profile_photo_url.startsWith("http")
+                                        ? user.profile_photo_url
+                                        : `http://localhost:80${user.profile_photo_url}`
+                                    }
+                                    alt={user.name}
+                                  />
+                                )}
                                 <AvatarFallback>
                                   {user.name
                                     .split(" ")
@@ -722,8 +677,8 @@ export default function AdminUsersPage() {
             <Dialog
               open={isEditDialogOpen}
               onOpenChange={(open) => {
-                setIsEditDialogOpen(open)
-                if (!open) setFormError(null)
+                setIsEditDialogOpen(open);
+                if (!open) setFormError(null);
               }}
             >
               <DialogContent className="max-h-[80vh] overflow-y-auto" ref={editDialogRef}>
@@ -879,5 +834,5 @@ export default function AdminUsersPage() {
         )}
       </div>
     </MainLayout>
-  )
+  );
 }
