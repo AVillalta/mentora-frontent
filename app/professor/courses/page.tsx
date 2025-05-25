@@ -1,202 +1,182 @@
-"use client"
+"use client";
 
-import { useState, useEffect, ChangeEvent } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import api from "@/lib/api"
-import MainLayout from "@/components/layout/main-layout"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { ChevronRight, Home, Search, Users } from "lucide-react"
-import { AxiosError } from "axios"
+import { useState, useEffect, ChangeEvent } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import api from "@/lib/api";
+import MainLayout from "@/components/layout/main-layout";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Search, Users } from "lucide-react";
+import { AxiosError } from "axios";
+import useAuth from "@/hooks/useAuth";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 // Interfaz para la respuesta de la API de cursos
 interface ApiCourse {
-  id: string
-  signature: string
-  description: string
-  semester: string
-  enrollments_count: number
-  status: string
+  id: string;
+  signature: string;
+  description: string;
+  semester: { id: string; name: string; is_active: boolean };
+  students: number;
+  status: string;
 }
 
 // Interfaz para curso en el estado
 interface Course {
-  id: string
-  title: string
-  description: string
-  semester: string
-  students: number
-  is_active: boolean
+  id: string;
+  title: string;
+  description: string;
+  semester: { id: string; name: string; is_active: boolean };
+  students: number;
+  is_active: boolean;
 }
 
 interface ApiErrorResponse {
-  message?: string
-  data?: string
-  errors?: { [key: string]: string[] }
+  message?: string;
+  data?: string;
+  errors?: { [key: string]: string[] };
 }
 
 export default function ProfessorCoursesPage() {
-  const router = useRouter()
-  const [token, setToken] = useState<string | null>(
-    typeof window !== "undefined" ? localStorage.getItem("token") : null
-  )
-  const [loadingAuth, setLoadingAuth] = useState(true)
-  const [authError, setAuthError] = useState<string | null>(null)
-  const [userName, setUserName] = useState("Cargando...")
-  const [userEmail, setUserEmail] = useState("cargando@mentora.edu")
-  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null)
-  const [courses, setCourses] = useState<Course[]>([])
-  const [searchTerm, setSearchTerm] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  // Verificar autenticación y obtener profilePhotoUrl
-  useEffect(() => {
-    if (!token) {
-      setAuthError("No estás autenticado. Redirigiendo al login...")
-      router.push("/login")
-      return
-    }
-
-    const verifyUser = async () => {
-      try {
-        console.log("Verificando usuario...")
-        const response = await api.get("/user", { timeout: 10000 })
-        const { role, name, email, profile_photo_url } = response.data.data || {}
-        console.log("Usuario verificado:", { role, name, email, profile_photo_url })
-        if (role !== "professor") {
-          throw new Error("Acceso denegado. No eres profesor.")
-        }
-        setUserName(name || "Profesor")
-        setUserEmail(email || "profesor@mentora.edu")
-        setProfilePhotoUrl(profile_photo_url)
-        setLoadingAuth(false)
-      } catch (err: unknown) {
-        const error = err as AxiosError<ApiErrorResponse>
-        console.error("Error al verificar usuario:", error.message, error.response?.data)
-        setAuthError(error.response?.data?.message || "Token inválido. Redirigiendo al login...")
-        localStorage.removeItem("token")
-        router.push("/login")
-      }
-    }
-
-    verifyUser()
-  }, [token, router])
+  const router = useRouter();
+  const { user, loading: loadingAuth, error: authError } = useAuth("professor");
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Cargar cursos
   useEffect(() => {
-    if (loadingAuth || authError) return
+    if (loadingAuth || authError) return;
 
     const fetchCourses = async () => {
       try {
-        setLoading(true)
-        console.log("Iniciando fetch de cursos...")
-        const response = await api.get("/courses", { timeout: 10000 })
-        console.log("Respuesta de /courses:", response.data)
-        setCourses(
-          response.data.data.map((c: ApiCourse) => ({
-            id: c.id,
-            title: c.signature || "Curso desconocido",
-            description: c.description || "Sin descripción",
-            semester: c.semester || "Desconocido",
-            students: c.enrollments_count || 0,
-            is_active: c.status === "active",
-          })) || []
-        )
-        setError(null)
+        setLoading(true);
+        console.log("Iniciando fetch de cursos...");
+        const response = await api.get("/courses", { timeout: 10000 });
+        console.log("Respuesta de /courses:", response.data);
+        const normalizedCourses = response.data.data?.map((c: ApiCourse) => ({
+          id: c.id,
+          title: c.signature || "Curso desconocido",
+          description: c.description || "Sin descripción",
+          semester: c.semester || { id: "", name: "Desconocido", is_active: false },
+          students: Number(c.students ?? 0),
+          is_active: c.status === "active",
+        })) || [];
+        console.log("Cursos normalizados:", normalizedCourses);
+        console.log("Cursos activos:", normalizedCourses.filter(c => c.is_active).length);
+        console.log("Cursos inactivos:", normalizedCourses.filter(c => !c.is_active).length);
+        setCourses(normalizedCourses);
+        setError(null);
       } catch (err: unknown) {
-        const error = err as AxiosError<ApiErrorResponse>
-        console.error("Error al cargar datos:", error.response?.data || error.message)
-        setError(error.response?.data?.message || "Error al cargar los cursos. Inténtalo de nuevo.")
+        const error = err as AxiosError<ApiErrorResponse>;
+        console.error("Error al cargar datos:", error.response?.data || error.message);
+        setError(error.response?.data?.message || "Error al cargar los cursos. Inténtalo de nuevo.");
       } finally {
-        setLoading(false)
-        console.log("Fetch de datos completado, loading:", false)
+        setLoading(false);
+        console.log("Fetch de datos completado, loading:", false);
       }
-    }
+    };
 
-    fetchCourses()
-  }, [loadingAuth, authError])
+    fetchCourses();
+  }, [loadingAuth, authError]);
 
-  // Filtrar cursos según el término de búsqueda
+  // Filtrar cursos según el término de búsqueda y estado activo
   const filteredCourses = courses.filter(
     (course) =>
-      course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      course.description.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+      course.is_active &&
+      (course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+       course.description.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
+  // Si está cargando autenticación
   if (loadingAuth) {
     return (
       <MainLayout
         userRole="professor"
-        userName={userName}
-        userEmail={userEmail}
-        profilePhotoUrl={profilePhotoUrl}
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@mentora.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
       >
         <div className="flex flex-col items-center justify-center h-[50vh]">
           <p className="text-xl">Verificando autenticación...</p>
         </div>
       </MainLayout>
-    )
+    );
   }
 
+  // Si hay error de autenticación
   if (authError) {
     return (
       <MainLayout
         userRole="professor"
-        userName={userName}
-        userEmail={userEmail}
-        profilePhotoUrl={profilePhotoUrl}
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@mentora.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
       >
         <div className="flex flex-col items-center justify-center h-[50vh]">
-          <p className="text-red-500 text-xl">{authError}</p>
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{authError}</AlertDescription>
+          </Alert>
+          <Button asChild className="mt-4">
+            <Link href="/login">Volver al Login</Link>
+          </Button>
         </div>
       </MainLayout>
-    )
+    );
   }
 
+  // Si está cargando datos
   if (loading) {
     return (
       <MainLayout
         userRole="professor"
-        userName={userName}
-        userEmail={userEmail}
-        profilePhotoUrl={profilePhotoUrl}
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@mentora.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
       >
         <div className="flex flex-col items-center justify-center h-[50vh]">
           <p className="text-xl">Cargando cursos...</p>
         </div>
       </MainLayout>
-    )
+    );
   }
 
+  // Si hay error
   if (error) {
     return (
       <MainLayout
         userRole="professor"
-        userName={userName}
-        userEmail={userEmail}
-        profilePhotoUrl={profilePhotoUrl}
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@mentora.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
       >
         <div className="flex flex-col items-center justify-center h-[50vh]">
-          <h1 className="text-2xl font-bold">{error}</h1>
-          <p className="text-muted-foreground mt-2">Ocurrió un problema al cargar los cursos.</p>
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
           <Button asChild className="mt-4">
             <Link href="/professor">Volver al Dashboard</Link>
           </Button>
         </div>
       </MainLayout>
-    )
+    );
   }
 
   return (
     <MainLayout
       userRole="professor"
-      userName={userName}
-      userEmail={userEmail}
-      profilePhotoUrl={profilePhotoUrl}
+      userName={user?.name || "Cargando..."}
+      userEmail={user?.email || "cargando@mentora.edu"}
+      profilePhotoUrl={user?.profilePhotoUrl || null}
     >
       <div className="flex flex-col gap-6 p-3 xs:p-4 w-full min-w-full max-w-full">
         {/* Encabezado */}
@@ -248,7 +228,7 @@ export default function ProfessorCoursesPage() {
                     >
                       <td className="p-3 xs:p-4 align-middle font-medium text-sm xs:text-base">{course.title}</td>
                       <td className="p-3 xs:p-4 align-middle text-sm xs:text-base">{course.description}</td>
-                      <td className="p-3 xs:p-4 align-middle text-sm xs:text-base">{course.semester}</td>
+                      <td className="p-3 xs:p-4 align-middle text-sm xs:text-base">{course.semester.name}</td>
                       <td className="p-3 xs:p-4 align-middle text-sm xs:text-base">{course.students}</td>
                       <td className="p-3 xs:p-4 align-middle">
                         <Badge
@@ -278,12 +258,12 @@ export default function ProfessorCoursesPage() {
 
             {filteredCourses.length === 0 && (
               <div className="text-center text-muted-foreground mt-6 text-sm xs:text-base">
-                No hay cursos que coincidan con los filtros.
+                No hay cursos activos que coincidan con los filtros.
               </div>
             )}
           </CardContent>
         </Card>
       </div>
     </MainLayout>
-  )
+  );
 }
