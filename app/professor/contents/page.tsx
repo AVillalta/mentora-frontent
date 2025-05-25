@@ -1,15 +1,16 @@
-"use client"
+"use client";
 
-import { useState, useEffect, ChangeEvent } from "react"
-import { useRouter } from "next/navigation"
-import api from "@/lib/api"
-import MainLayout from "@/components/layout/main-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { useState, useEffect, ChangeEvent } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import api from "@/lib/api";
+import MainLayout from "@/components/layout/main-layout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -18,8 +19,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   Book,
   Calendar,
@@ -36,107 +37,104 @@ import {
   FileImage,
   File as FilePdf,
   FileSpreadsheet,
-} from "lucide-react"
-import Link from "next/link"
+} from "lucide-react";
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import { AxiosError } from "axios"
+} from "@/components/ui/breadcrumb";
+import { AxiosError } from "axios";
+import useAuth from "@/hooks/useAuth";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 interface Content {
-  id: string
-  name: string
-  description: string
-  bibliography?: string
-  order: number
-  file_path?: string
-  type: string
-  format: string
-  size: number
-  views: number
-  downloads: number
-  duration?: string
-  course_id: string
-  course: string
-  created_at: string
-  updated_at: string
+  id: string;
+  name: string;
+  description: string;
+  bibliography?: string;
+  order: number;
+  file_path?: string;
+  type: string;
+  format: string;
+  size: number;
+  views: number;
+  downloads: number;
+  duration?: string;
+  course_id: string;
+  course: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface Media {
-  id: string
-  file_name: string
-  url: string
-  mime_type: string
-  size: number
-  created_at: string
-  updated_at: string
+  id: string;
+  file_name: string;
+  url: string;
+  mime_type: string;
+  size: number;
+  created_at: string;
+  updated_at: string;
 }
 
 interface Assignment {
-  id: string
-  title: string
-  description: string
-  course_id: string
-  course: string | { id: string; name: string; syllabus?: string; syllabus_pdf?: string; professor_id?: string; created_at?: string; updated_at?: string; media?: Media[] }
-  due_date: string
-  submissions: number
-  total_students: number
-  submissions_files: { id: string; file_name: string; url: string; size: number; student_id: string; student_name: string; created_at: string }[]
-  created_at: string
-  updated_at: string
+  id: string;
+  title: string;
+  description: string;
+  course_id: string;
+  course: string | { id: string; name: string; syllabus?: string; syllabus_pdf?: string; professor_id?: string; created_at?: string; updated_at?: string; media?: Media[] };
+  due_date: string;
+  submissions: number;
+  total_students: number;
+  submissions_files: { id: string; file_name: string; url: string; size: number; student_id: string; student_name: string; created_at: string }[];
+  created_at: string;
+  updated_at: string;
 }
 
 interface Grade {
-  id: string
-  title: string
-  grade_type: string
-  grade_value: number | null
-  grade_date: string
-  enrollment_id: string
-  assignment_id: string
-  course_name: string
+  id: string;
+  title: string;
+  grade_type: string;
+  grade_value: number | null;
+  grade_date: string;
+  enrollment_id: string;
+  assignment_id: string;
+  course_name: string;
 }
 
 interface Course {
-  id: string
-  signature: string
+  id: string;
+  signature: string;
+  status: string;
 }
 
 interface ApiErrorResponse {
-  message?: string
-  data?: string
-  errors?: { [key: string]: string[] }
+  message?: string;
+  data?: string;
+  errors?: { [key: string]: string[] };
 }
 
 export default function ProfessorContentsPage() {
-  const router = useRouter()
-  const [token, setToken] = useState<string | null>(
-    typeof window !== "undefined" ? localStorage.getItem("token") : null
-  )
-  const [loadingAuth, setLoadingAuth] = useState(true)
-  const [authError, setAuthError] = useState<string | null>(null)
-  const [contents, setContents] = useState<Content[]>([])
-  const [assignments, setAssignments] = useState<Assignment[]>([])
-  const [courses, setCourses] = useState<Course[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [userName, setUserName] = useState("Cargando...")
-  const [userEmail, setUserEmail] = useState("cargando@mentora.edu")
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedCourse, setSelectedCourse] = useState("all")
-  const [isCreateContentDialogOpen, setIsCreateContentDialogOpen] = useState(false)
-  const [isCreateAssignmentDialogOpen, setIsCreateAssignmentDialogOpen] = useState(false)
-  const [isEditContentDialogOpen, setIsEditContentDialogOpen] = useState(false)
-  const [isEditAssignmentDialogOpen, setIsEditAssignmentDialogOpen] = useState(false)
-  const [isViewSubmissionsDialogOpen, setIsViewSubmissionsDialogOpen] = useState(false)
-  const [selectedContent, setSelectedContent] = useState<Content | null>(null)
-  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null)
-  const [submissionGrade, setSubmissionGrade] = useState<{ [key: string]: string }>({})
-  const [submissionGrades, setSubmissionGrades] = useState<{ [key: string]: Grade | null }>({})
+  const router = useRouter();
+  const { user, loading: loadingAuth, error: authError } = useAuth("professor");
+  const [contents, setContents] = useState<Content[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCourse, setSelectedCourse] = useState("all");
+  const [isCreateContentDialogOpen, setIsCreateContentDialogOpen] = useState(false);
+  const [isCreateAssignmentDialogOpen, setIsCreateAssignmentDialogOpen] = useState(false);
+  const [isEditContentDialogOpen, setIsEditContentDialogOpen] = useState(false);
+  const [isEditAssignmentDialogOpen, setIsEditAssignmentDialogOpen] = useState(false);
+  const [isViewSubmissionsDialogOpen, setIsViewSubmissionsDialogOpen] = useState(false);
+  const [selectedContent, setSelectedContent] = useState<Content | null>(null);
+  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
+  const [submissionGrade, setSubmissionGrade] = useState<{ [key: string]: string }>({});
+  const [submissionGrades, setSubmissionGrades] = useState<{ [key: string]: Grade | null }>({});
   const [contentFormData, setContentFormData] = useState({
     name: "",
     description: "",
@@ -146,123 +144,82 @@ export default function ProfessorContentsPage() {
     format: "pdf",
     file: null as File | null,
     course_id: "",
-  })
+  });
   const [assignmentFormData, setAssignmentFormData] = useState({
     title: "",
     description: "",
     course_id: "",
     due_date: "",
-  })
+  });
 
-  // Función auxiliar para obtener el nombre del curso en Assignment
-  const getAssignmentCourseName = (assignment: Assignment): string => {
-    if (!assignment || !assignment.course) {
-      return "Curso sin nombre"
-    }
-    if (typeof assignment.course === "string") {
-      return assignment.course
-    }
-    if (typeof assignment.course === "object" && assignment.course.name) {
-      return assignment.course.name
-    }
-    return "Curso sin nombre"
-  }
-
-  // Función auxiliar para obtener el nombre del curso en Course
-  const getCourseName = (course: Course): string => {
-    if (!course || !course.signature) {
-      return "Curso sin nombre"
-    }
-    if (typeof course.signature !== "string") {
-      return "Curso sin nombre"
-    }
-    return course.signature
-  }
-
-  // Verificar autenticación
-  useEffect(() => {
-    if (!token) {
-      setAuthError("No estás autenticado. Redirigiendo al login...")
-      router.push("/login")
-      return
-    }
-
-    const verifyUser = async () => {
-      try {
-        console.log("Verificando usuario...")
-        const response = await api.get("/user", { timeout: 10000 })
-        const { role, name, email } = response.data.data || {}
-        console.log("Usuario verificado:", { role, name, email })
-        if (role !== "professor") {
-          throw new Error("Acceso denegado. No eres profesor.")
-        }
-        setUserName(name || "Profesor")
-        setUserEmail(email || "profesor@mentora.edu")
-        setLoadingAuth(false)
-      } catch (err: unknown) {
-        const error = err as AxiosError<ApiErrorResponse>
-        console.error("Error al verificar usuario:", error.message, error.response?.data)
-        setAuthError(error.response?.data?.message || "Token inválido. Redirigiendo al login...")
-        localStorage.removeItem("token")
-        router.push("/login")
-      }
-    }
-
-    verifyUser()
-  }, [token, router])
+  // Función auxiliar para obtener el nombre del curso
+  const getCourseName = (courseId: string): string => {
+    const course = courses.find((c) => c.id === courseId);
+    return course?.signature || "Curso sin nombre";
+  };
 
   // Cargar datos
   useEffect(() => {
-    if (loadingAuth || authError) return
+    if (loadingAuth || authError) return;
 
     const fetchData = async () => {
       try {
-        setLoading(true)
-        console.log("Iniciando fetch de datos...")
+        setLoading(true);
+        console.log("Iniciando fetch de datos...");
         const [contentsRes, assignmentsRes, coursesRes] = await Promise.all([
           api.get("/contents", { timeout: 10000 }),
           api.get("/assignments", { timeout: 10000 }),
           api.get("/courses", { timeout: 10000 }),
-        ])
-        console.log("Respuesta de /contents:", contentsRes.data)
-        console.log("Respuesta de /assignments:", assignmentsRes.data)
-        console.log("Respuesta de /courses:", coursesRes.data)
-        setContents(contentsRes.data.data || [])
-        setAssignments(assignmentsRes.data.data || [])
-        setCourses(coursesRes.data.data || [])
-        setError(null)
+        ]);
+        console.log("Respuesta de /contents:", contentsRes.data);
+        console.log("Respuesta de /assignments:", assignmentsRes.data);
+        console.log("Respuesta de /courses:", coursesRes.data);
+        const contentsData = contentsRes.data.data || [];
+        const assignmentsData = assignmentsRes.data.data || [];
+        const coursesData = coursesRes.data.data?.map((c: { id: string; signature?: string; status?: string }) => ({
+          id: c.id,
+          signature: c.signature || "Curso desconocido",
+          status: c.status || "inactive",
+        })) || [];
+        console.log("Contenidos filtrados:", contentsData.length);
+        console.log("Tareas filtradas:", assignmentsData.length);
+        console.log("Cursos activos:", coursesData.filter((c: Course) => c.status === "active").length);
+        setContents(contentsData);
+        setAssignments(assignmentsData);
+        setCourses(coursesData);
+        setError(null);
       } catch (err: unknown) {
-        const error = err as AxiosError<ApiErrorResponse>
-        console.error("Error al cargar datos:", error.response?.data || error.message)
-        setError(error.response?.data?.message || "Error al cargar los datos. Inténtalo de nuevo.")
+        const error = err as AxiosError<ApiErrorResponse>;
+        console.error("Error al cargar datos:", error.response?.data || error.message);
+        setError(error.response?.data?.message || "Error al cargar los datos. Inténtalo de nuevo.");
       } finally {
-        setLoading(false)
-        console.log("Fetch de datos completado, loading:", false)
+        setLoading(false);
+        console.log("Fetch de datos completado, loading:", false);
       }
-    }
+    };
 
-    fetchData()
-  }, [loadingAuth, authError])
+    fetchData();
+  }, [loadingAuth, authError]);
 
   // Crear contenido
   const handleCreateContent = async () => {
     try {
-      const formDataToSend = new FormData()
-      formDataToSend.append("name", contentFormData.name)
-      formDataToSend.append("description", contentFormData.description)
-      formDataToSend.append("bibliography", contentFormData.bibliography)
-      formDataToSend.append("order", contentFormData.order)
-      formDataToSend.append("type", contentFormData.type)
-      formDataToSend.append("format", contentFormData.format)
+      const formDataToSend = new FormData();
+      formDataToSend.append("name", contentFormData.name);
+      formDataToSend.append("description", contentFormData.description);
+      formDataToSend.append("bibliography", contentFormData.bibliography);
+      formDataToSend.append("order", contentFormData.order);
+      formDataToSend.append("type", contentFormData.type);
+      formDataToSend.append("format", contentFormData.format);
       if (contentFormData.file) {
-        formDataToSend.append("file", contentFormData.file)
+        formDataToSend.append("file", contentFormData.file);
       }
-      formDataToSend.append("course_id", contentFormData.course_id)
+      formDataToSend.append("course_id", contentFormData.course_id);
 
       await api.post("/contents", formDataToSend, {
         headers: { "Content-Type": "multipart/form-data" },
-      })
-      setIsCreateContentDialogOpen(false)
+      });
+      setIsCreateContentDialogOpen(false);
       setContentFormData({
         name: "",
         description: "",
@@ -272,37 +229,37 @@ export default function ProfessorContentsPage() {
         format: "pdf",
         file: null,
         course_id: "",
-      })
-      const response = await api.get("/contents")
-      setContents(response.data.data || [])
-      setError(null)
+      });
+      const response = await api.get("/contents");
+      setContents(response.data.data || []);
+      setError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      console.error("Error al crear contenido:", error.response?.data || error.message)
-      setError(error.response?.data?.message || "Error al crear el contenido. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      console.error("Error al crear contenido:", error.response?.data || error.message);
+      setError(error.response?.data?.message || "Error al crear el contenido. Inténtalo de nuevo.");
     }
-  }
+  };
 
   // Editar contenido
   const handleEditContent = async () => {
-    if (!selectedContent) return
+    if (!selectedContent) return;
     try {
-      const formDataToSend = new FormData()
-      formDataToSend.append("name", contentFormData.name)
-      formDataToSend.append("description", contentFormData.description)
-      formDataToSend.append("bibliography", contentFormData.bibliography)
-      formDataToSend.append("order", contentFormData.order)
-      formDataToSend.append("type", contentFormData.type)
-      formDataToSend.append("format", contentFormData.format)
+      const formDataToSend = new FormData();
+      formDataToSend.append("name", contentFormData.name);
+      formDataToSend.append("description", contentFormData.description);
+      formDataToSend.append("bibliography", contentFormData.bibliography);
+      formDataToSend.append("order", contentFormData.order);
+      formDataToSend.append("type", contentFormData.type);
+      formDataToSend.append("format", contentFormData.format);
       if (contentFormData.file) {
-        formDataToSend.append("file", contentFormData.file)
+        formDataToSend.append("file", contentFormData.file);
       }
-      formDataToSend.append("course_id", contentFormData.course_id)
+      formDataToSend.append("course_id", contentFormData.course_id);
 
       await api.put(`/contents/${selectedContent.id}`, formDataToSend, {
         headers: { "Content-Type": "multipart/form-data" },
-      })
-      setIsEditContentDialogOpen(false)
+      });
+      setIsEditContentDialogOpen(false);
       setContentFormData({
         name: "",
         description: "",
@@ -312,125 +269,124 @@ export default function ProfessorContentsPage() {
         format: "pdf",
         file: null,
         course_id: "",
-      })
-      setSelectedContent(null)
-      const response = await api.get("/contents")
-      setContents(response.data.data || [])
-      setError(null)
+      });
+      setSelectedContent(null);
+      const response = await api.get("/contents");
+      setContents(response.data.data || []);
+      setError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      console.error("Error al editar contenido:", error.response?.data || error.message)
-      setError(error.response?.data?.message || "Error al editar el contenido. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      console.error("Error al editar contenido:", error.response?.data || error.message);
+      setError(error.response?.data?.message || "Error al editar el contenido. Inténtalo de nuevo.");
     }
-  }
+  };
 
   // Eliminar contenido
   const handleDeleteContent = async (id: string) => {
     try {
-      await api.delete(`/contents/${id}`)
-      const response = await api.get("/contents")
-      setContents(response.data.data || [])
-      setError(null)
+      await api.delete(`/contents/${id}`);
+      const response = await api.get("/contents");
+      setContents(response.data.data || []);
+      setError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      console.error("Error al eliminar contenido:", error.response?.data || error.message)
-      setError(error.response?.data?.message || "Error al eliminar el contenido. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      console.error("Error al eliminar contenido:", error.response?.data || error.message);
+      setError(error.response?.data?.message || "Error al eliminar el contenido. Inténtalo de nuevo.");
     }
-  }
+  };
 
   // Crear tarea
   const handleCreateAssignment = async () => {
     try {
-      await api.post("/assignments", assignmentFormData)
-      setIsCreateAssignmentDialogOpen(false)
+      await api.post("/assignments", assignmentFormData);
+      setIsCreateAssignmentDialogOpen(false);
       setAssignmentFormData({
         title: "",
         description: "",
         course_id: "",
         due_date: "",
-      })
-      const response = await api.get("/assignments")
-      setAssignments(response.data.data || [])
-      setError(null)
+      });
+      const response = await api.get("/assignments");
+      setAssignments(response.data.data || []);
+      setError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      console.error("Error al crear tarea:", error.response?.data || error.message)
-      setError(error.response?.data?.message || "Error al crear la tarea. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      console.error("Error al crear tarea:", error.response?.data || error.message);
+      setError(error.response?.data?.message || "Error al crear la tarea. Inténtalo de nuevo.");
     }
-  }
+  };
 
   // Editar tarea
   const handleEditAssignment = async () => {
-    if (!selectedAssignment) return
+    if (!selectedAssignment) return;
     try {
-      await api.put(`/assignments/${selectedAssignment.id}`, assignmentFormData)
-      setIsEditAssignmentDialogOpen(false)
+      await api.put(`/assignments/${selectedAssignment.id}`, assignmentFormData);
+      setIsEditAssignmentDialogOpen(false);
       setAssignmentFormData({
         title: "",
         description: "",
         course_id: "",
         due_date: "",
-      })
-      setSelectedAssignment(null)
-      const response = await api.get("/assignments")
-      setAssignments(response.data.data || [])
-      setError(null)
+      });
+      setSelectedAssignment(null);
+      const response = await api.get("/assignments");
+      setAssignments(response.data.data || []);
+      setError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      console.error("Error al editar tarea:", error.response?.data || error.message)
-      setError(error.response?.data?.message || "Error al editar la tarea. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      console.error("Error al editar tarea:", error.response?.data || error.message);
+      setError(error.response?.data?.message || "Error al editar la tarea. Inténtalo de nuevo.");
     }
-  }
+  };
 
   // Eliminar tarea
   const handleDeleteAssignment = async (id: string) => {
     try {
-      await api.delete(`/assignments/${id}`)
-      const response = await api.get("/assignments")
-      setAssignments(response.data.data || [])
-      setError(null)
+      await api.delete(`/assignments/${id}`);
+      const response = await api.get("/assignments");
+      setAssignments(response.data.data || []);
+      setError(null);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      console.error("Error al eliminar tarea:", error.response?.data || error.message)
-      setError(error.response?.data?.message || "Error al eliminar la tarea. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      console.error("Error al eliminar tarea:", error.response?.data || error.message);
+      setError(error.response?.data?.message || "Error al eliminar el contenido. Inténtalo de nuevo.");
     }
-  }
+  };
 
   // Ver entregas
   const handleViewSubmissions = async (assignment: Assignment) => {
-    setSelectedAssignment(assignment)
-    setSubmissionGrades({})
-    setSubmissionGrade({})
+    setSelectedAssignment(assignment);
+    setSubmissionGrades({});
+    setSubmissionGrade({});
     try {
-      const gradesResponse = await api.get(`/grades?assignment_id=${assignment.id}`)
-      const grades = gradesResponse.data.data || []
-      const gradeMap: { [key: string]: Grade | null } = {}
+      const gradesResponse = await api.get(`/grades?assignment_id=${assignment.id}`);
+      const grades = gradesResponse.data.data || [];
+      const gradeMap: { [key: string]: Grade | null } = {};
 
-      // Agrupar entregas por estudiante y seleccionar la más reciente
       const latestSubmissions = assignment.submissions_files.reduce((acc, submission) => {
-        const existing = acc[submission.student_id]
+        const existing = acc[submission.student_id];
         if (!existing || new Date(submission.created_at) > new Date(existing.created_at)) {
-          acc[submission.student_id] = submission
+          acc[submission.student_id] = submission;
         }
-        return acc
-      }, {} as { [key: string]: Assignment['submissions_files'][0] })
+        return acc;
+      }, {} as { [key: string]: Assignment['submissions_files'][0] });
 
       Object.values(latestSubmissions).forEach((submission) => {
         const grade = grades.find(
           (g: Grade) => g.assignment_id === assignment.id && g.enrollment_id.includes(submission.student_id)
-        )
-        gradeMap[submission.id] = grade || null
-      })
-      setSubmissionGrades(gradeMap)
+        );
+        gradeMap[submission.id] = grade || null;
+      });
+      setSubmissionGrades(gradeMap);
     } catch (err) {
-      console.error("Error al cargar notas:", err)
+      console.error("Error al cargar notas:", err);
     }
-    setIsViewSubmissionsDialogOpen(true)
-  }
+    setIsViewSubmissionsDialogOpen(true);
+  };
 
   // Editar contenido (click)
   const handleEditContentClick = (content: Content) => {
-    setSelectedContent(content)
+    setSelectedContent(content);
     setContentFormData({
       name: content.name,
       description: content.description,
@@ -440,44 +396,41 @@ export default function ProfessorContentsPage() {
       format: content.format,
       file: null,
       course_id: content.course_id,
-    })
-    setIsEditContentDialogOpen(true)
-  }
+    });
+    setIsEditContentDialogOpen(true);
+  };
 
   // Editar tarea (click)
   const handleEditAssignmentClick = (assignment: Assignment) => {
-    setSelectedAssignment(assignment)
+    setSelectedAssignment(assignment);
     setAssignmentFormData({
       title: assignment.title,
       description: assignment.description,
       course_id: assignment.course_id,
       due_date: new Date(assignment.due_date).toISOString().split("T")[0],
-    })
-    setIsEditAssignmentDialogOpen(true)
-  }
+    });
+    setIsEditAssignmentDialogOpen(true);
+  };
 
   // Filtrar contenidos
   const filteredContents = contents.filter((content) => {
     const matchesSearch =
       content.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       content.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      content.course.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCourse = selectedCourse === "all" || content.course_id === selectedCourse
-
-    return matchesSearch && matchesCourse
-  })
+      getCourseName(content.course_id).toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCourse = selectedCourse === "all" || content.course_id === selectedCourse;
+    return matchesSearch && matchesCourse;
+  });
 
   // Filtrar tareas
   const filteredAssignments = assignments.filter((assignment) => {
-    const courseName = getAssignmentCourseName(assignment)
     const matchesSearch =
       assignment.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       assignment.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      courseName.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCourse = selectedCourse === "all" || assignment.course_id === selectedCourse
-
-    return matchesSearch && matchesCourse
-  })
+      getCourseName(assignment.course_id).toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCourse = selectedCourse === "all" || assignment.course_id === selectedCourse;
+    return matchesSearch && matchesCourse;
+  });
 
   // Obtener ícono de archivo
   const getFileIcon = (type: string, format: string) => {
@@ -487,67 +440,101 @@ export default function ProfessorContentsPage() {
           <FilePdf className="h-10 w-10 text-red-500" />
         ) : (
           <FileText className="h-10 w-10 text-blue-500" />
-        )
+        );
       case "presentation":
-        return <FileImage className="h-10 w-10 text-orange-500" />
+        return <FileImage className="h-10 w-10 text-orange-500" />;
       case "video":
-        return <Film className="h-10 w-10 text-purple-500" />
+        return <Film className="h-10 w-10 text-purple-500" />;
       case "code":
-        return <FileCode className="h-10 w-10 text-green-500" />
+        return <FileCode className="h-10 w-10 text-green-500" />;
       case "spreadsheet":
-        return <FileSpreadsheet className="h-10 w-10 text-green-500" />
+        return <FileSpreadsheet className="h-10 w-10 text-green-500" />;
       default:
-        return <FileText className="h-10 w-10 text-gray-500" />
+        return <FileText className="h-10 w-10 text-gray-500" />;
     }
-  }
+  };
 
-  // TODO: Considerar extraer a ContentsManager.tsx para reusar en admin/contents
   if (loadingAuth) {
     return (
-      <MainLayout userRole="professor" userName={userName} userEmail={userEmail}>
+      <MainLayout
+        userRole="professor"
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@mentora.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
+      >
         <div className="flex flex-col items-center justify-center h-[50vh]">
           <p className="text-xl">Verificando autenticación...</p>
         </div>
       </MainLayout>
-    )
+    );
   }
 
   if (authError) {
     return (
-      <MainLayout userRole="professor" userName={userName} userEmail={userEmail}>
+      <MainLayout
+        userRole="professor"
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@mentora.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
+      >
         <div className="flex flex-col items-center justify-center h-[50vh]">
-          <p className="text-red-500 text-xl">{authError}</p>
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{authError}</AlertDescription>
+          </Alert>
+          <Button asChild className="mt-4">
+            <Link href="/login">Volver al Login</Link>
+          </Button>
         </div>
       </MainLayout>
-    )
+    );
   }
 
   if (loading) {
     return (
-      <MainLayout userRole="professor" userName={userName} userEmail={userEmail}>
+      <MainLayout
+        userRole="professor"
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@mentora.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
+      >
         <div className="flex flex-col items-center justify-center h-[50vh]">
           <p className="text-xl">Cargando contenidos...</p>
         </div>
       </MainLayout>
-    )
+    );
   }
 
   if (error) {
     return (
-      <MainLayout userRole="professor" userName={userName} userEmail={userEmail}>
+      <MainLayout
+        userRole="professor"
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@mentora.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
+      >
         <div className="flex flex-col items-center justify-center h-[50vh]">
-          <h1 className="text-2xl font-bold">{error}</h1>
-          <p className="text-muted-foreground mt-2">Ocurrió un problema al cargar los contenidos.</p>
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
           <Button asChild className="mt-4">
             <Link href="/professor">Volver al Dashboard</Link>
           </Button>
         </div>
       </MainLayout>
-    )
+    );
   }
 
   return (
-    <MainLayout userRole="professor" userName={userName} userEmail={userEmail}>
+    <MainLayout
+      userRole="professor"
+      userName={user?.name || "Cargando..."}
+      userEmail={user?.email || "cargando@mentora.edu"}
+      profilePhotoUrl={user?.profilePhotoUrl || null}
+    >
       <div className="flex flex-col gap-6 p-4">
         {/* Breadcrumbs */}
         <Breadcrumb className="mb-2">
@@ -588,9 +575,9 @@ export default function ProfessorContentsPage() {
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <option value="all">Todos los cursos</option>
-              {courses.map((course) => (
+              {courses.filter((course) => course.status === "active").map((course) => (
                 <option key={course.id} value={course.id}>
-                  {getCourseName(course)}
+                  {course.signature}
                 </option>
               ))}
             </select>
@@ -673,9 +660,9 @@ export default function ProfessorContentsPage() {
                         className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
                         <option value="">Selecciona un curso</option>
-                        {courses.map((course) => (
+                        {courses.filter((course) => course.status === "active").map((course) => (
                           <option key={course.id} value={course.id}>
-                            {getCourseName(course)}
+                            {course.signature}
                           </option>
                         ))}
                       </select>
@@ -790,9 +777,9 @@ export default function ProfessorContentsPage() {
                         className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
                         <option value="">Selecciona un curso</option>
-                        {courses.map((course) => (
+                        {courses.filter((course) => course.status === "active").map((course) => (
                           <option key={course.id} value={course.id}>
-                            {getCourseName(course)}
+                            {course.signature}
                           </option>
                         ))}
                       </select>
@@ -866,7 +853,7 @@ export default function ProfessorContentsPage() {
                       <CardContent className="p-4 pt-0 space-y-2">
                         <div className="flex items-center text-sm">
                           <Book className="mr-2 h-4 w-4 text-muted-foreground" />
-                          <span>{content.course}</span>
+                          <span>{getCourseName(content.course_id)}</span>
                         </div>
                         <div className="flex items-center text-sm">
                           <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
@@ -943,7 +930,7 @@ export default function ProfessorContentsPage() {
                     <CardContent className="p-4 pt-0 space-y-3">
                       <div className="flex items-center text-sm">
                         <Book className="mr-2 h-4 w-4 text-muted-foreground" />
-                        <span>{getAssignmentCourseName(assignment)}</span>
+                        <span>{getCourseName(assignment.course_id)}</span>
                       </div>
                       <div className="flex items-center text-sm">
                         <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
@@ -1034,9 +1021,9 @@ export default function ProfessorContentsPage() {
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   <option value="">Selecciona un curso</option>
-                  {courses.map((course) => (
+                  {courses.filter((course) => course.status === "active").map((course) => (
                     <option key={course.id} value={course.id}>
-                      {getCourseName(course)}
+                      {course.signature}
                     </option>
                   ))}
                 </select>
@@ -1144,9 +1131,9 @@ export default function ProfessorContentsPage() {
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   <option value="">Selecciona un curso</option>
-                  {courses.map((course) => (
+                  {courses.filter((course) => course.status === "active").map((course) => (
                     <option key={course.id} value={course.id}>
-                      {getCourseName(course)}
+                      {course.signature}
                     </option>
                   ))}
                 </select>
@@ -1184,14 +1171,14 @@ export default function ProfessorContentsPage() {
                 <div className="space-y-6">
                   {Object.values(
                     selectedAssignment.submissions_files.reduce((acc, submission) => {
-                      const existing = acc[submission.student_id]
+                      const existing = acc[submission.student_id];
                       if (!existing || new Date(submission.created_at) > new Date(existing.created_at)) {
-                        acc[submission.student_id] = submission
+                        acc[submission.student_id] = submission;
                       }
-                      return acc
+                      return acc;
                     }, {} as { [key: string]: Assignment['submissions_files'][0] })
                   ).map((submission) => {
-                    const grade = submissionGrades[submission.id]
+                    const grade = submissionGrades[submission.id];
                     return (
                       <div key={submission.id} className="grid grid-cols-1 md:grid-cols-5 gap-6 items-start border-b py-4">
                         <div className="col-span-1 md:col-span-4">
@@ -1230,18 +1217,18 @@ export default function ProfessorContentsPage() {
                                     await api.post(`/assignments/${selectedAssignment?.id}/submissions/${submission.id}/grade`, {
                                       grade_value: parseFloat(submissionGrade[submission.id]),
                                       student_id: submission.student_id,
-                                    })
-                                    const gradesResponse = await api.get(`/grades?assignment_id=${selectedAssignment?.id}`)
-                                    const grades = gradesResponse.data.data || []
+                                    });
+                                    const gradesResponse = await api.get(`/grades?assignment_id=${selectedAssignment?.id}`);
+                                    const grades = gradesResponse.data.data || [];
                                     const updatedGrade = grades.find(
                                       (g: Grade) => g.assignment_id === selectedAssignment?.id && g.enrollment_id.includes(submission.student_id)
-                                    )
-                                    setSubmissionGrades((prev) => ({ ...prev, [submission.id]: updatedGrade || null }))
-                                    setSubmissionGrade((prev) => ({ ...prev, [submission.id]: "" }))
-                                    alert("Nota guardada")
+                                    );
+                                    setSubmissionGrades((prev) => ({ ...prev, [submission.id]: updatedGrade || null }));
+                                    setSubmissionGrade((prev) => ({ ...prev, [submission.id]: "" }));
+                                    alert("Nota guardada");
                                   } catch (err) {
-                                    console.error("Error al guardar la nota:", err)
-                                    alert("Error al guardar la nota")
+                                    console.error("Error al guardar la nota:", err);
+                                    alert("Error al guardar la nota");
                                   }
                                 }
                               }}
@@ -1259,7 +1246,7 @@ export default function ProfessorContentsPage() {
                           </Button>
                         </div>
                       </div>
-                    )
+                    );
                   })}
                 </div>
               ) : (
@@ -1275,5 +1262,5 @@ export default function ProfessorContentsPage() {
         </Dialog>
       </div>
     </MainLayout>
-  )
+  );
 }
