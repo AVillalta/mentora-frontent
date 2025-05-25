@@ -1,17 +1,17 @@
-"use client"
+"use client";
 
-import { useState, useEffect, ChangeEvent } from "react"
-import { useParams, useRouter } from "next/navigation"
-import MainLayout from "@/components/layout/main-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { useState, useEffect, ChangeEvent } from "react";
+import { useParams, useRouter } from "next/navigation";
+import MainLayout from "@/components/layout/main-layout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Book,
   Calendar,
@@ -27,17 +27,20 @@ import {
   File as FilePdf,
   FileSpreadsheet,
   Upload,
-} from "lucide-react"
-import Link from "next/link"
+} from "lucide-react";
+import Link from "next/link";
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import api from "@/lib/api"
-import { AxiosError } from "axios"
+} from "@/components/ui/breadcrumb";
+import api from "@/lib/api";
+import { AxiosError } from "axios";
+import useAuth from "@/hooks/useAuth";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 // Componente personalizado para la barra de progreso
 const CustomProgress = ({ value, className }: { value: number; className?: string }) => {
@@ -48,174 +51,151 @@ const CustomProgress = ({ value, className }: { value: number; className?: strin
         style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }}
       />
     </div>
-  )
-}
+  );
+};
 
 // Interfaces basadas en CourseResource.php, GradeResource.php, Content, y Assignment
 interface Course {
-  id: string
-  code: string
-  schedule: string | string[]
-  weighting: string
-  signature: string
-  semester: string
-  professor: string
-  enrollments_count: number
-  status: string
+  id: string;
+  code: string;
+  schedule: { day: string; start_time: string; end_time: string }[];
+  weighting: string;
+  signature: string;
+  semester: {
+    id: string;
+    name: string;
+    is_active: boolean;
+  };
+  professor: string;
+  enrollments_count: number;
+  status: "active" | "inactive";
 }
 
 interface Grade {
-  id: string
-  grade_type: string
-  grade_value: number | null
-  grade_date: string
-  enrollment_id: string
-  course_name: string
+  id: string;
+  grade_type: string;
+  grade_value: number | null;
+  grade_date: string;
+  enrollment_id: string;
+  course_name: string;
 }
 
 interface Content {
-  id: number
-  name: string
-  description: string
-  bibliography: string | null
-  order: number
-  course_id: string
-  grade_id: number
-  created_at: string
-  updated_at: string
-  file_path?: string
+  id: number;
+  name: string;
+  description: string;
+  bibliography: string | null;
+  order: number;
+  course_id: string;
+  grade_id: number;
+  created_at: string;
+  updated_at: string;
+  file_path?: string;
 }
 
 interface Assignment {
-  id: number
-  title: string
-  description: string
-  due_date: string
-  course_id: string
-  created_at: string
-  updated_at: string
-  status?: string
-  points?: number
-  submissionType?: string
-  grade?: number
-  submissions_files?: { id: string; file_name: string; url: string; size: number; student_id: string; created_at: string }[]
+  id: number;
+  title: string;
+  description: string;
+  due_date: string;
+  course_id: string;
+  created_at: string;
+  updated_at: string;
+  status?: string;
+  points?: number;
+  submissionType?: string;
+  grade?: number;
+  submissions_files?: { id: string; file_name: string; url: string; size: number; student_id: string; created_at: string }[];
 }
 
 // Interfaz para el objeto courseData
 interface CourseData extends Course {
-  title: string
-  description: string
-  professorEmail: string
-  location: string
-  startDate: string
-  endDate: string
-  progress: number
-  students: number
-  announcements: { id: number; title: string; content: string; date: string }[]
-  modules: { id: number; title: string; materials: CourseMaterial[] }[]
-  assignments: Assignment[]
-  grades: CourseGrade[]
-  gradient: string
+  title: string;
+  description: string;
+  professorEmail: string;
+  location: string;
+  startDate: string;
+  endDate: string;
+  progress: number;
+  students: number;
+  announcements: { id: number; title: string; content: string; date: string }[];
+  modules: { id: number; title: string; materials: CourseMaterial[] }[];
+  assignments: Assignment[];
+  grades: CourseGrade[];
+  gradient: string;
 }
 
 // Interfaz para materiales
 interface CourseMaterial {
-  id: number
-  title: string
-  description: string
-  type: string
-  format: string
-  date: string
-  size: string
-  isNew: boolean
-  duration?: string
-  file_path?: string
+  id: number;
+  title: string;
+  description: string;
+  type: string;
+  format: string;
+  date: string;
+  size: string;
+  isNew: boolean;
+  duration?: string;
+  file_path?: string;
 }
 
 // Interfaz para calificaciones transformadas
 interface CourseGrade {
-  id: string
-  title: string
-  type: string
-  grade: number
-  maxGrade: number
-  date: string
+  id: string;
+  title: string;
+  type: string;
+  grade: number;
+  maxGrade: number;
+  date: string;
 }
 
 interface ApiErrorResponse {
-  message?: string
-  data?: string
-  errors?: { [key: string]: string[] }
+  message?: string;
+  data?: string;
+  errors?: { [key: string]: string[] };
 }
 
 interface ApiResponse<T> {
-  data: T | null
-  error?: AxiosError<ApiErrorResponse>
+  data: T | null;
+  error?: AxiosError<ApiErrorResponse>;
 }
 
 interface CourseResponse {
-  data: Course
+  data: Course;
 }
 interface GradesResponse {
-  data: Grade[]
+  data: Grade[];
 }
 interface ContentsResponse {
-  data: Content[]
+  data: Content[];
 }
 interface AssignmentsResponse {
-  data: Assignment[]
+  data: Assignment[];
 }
 
 export default function CourseDetailPage() {
-  const params = useParams()
-  const router = useRouter()
-  const courseId = params.id as string
-  const [activeTab, setActiveTab] = useState("overview")
-  const [course, setCourse] = useState<Course | null>(null)
-  const [grades, setGrades] = useState<Grade[]>([])
-  const [contents, setContents] = useState<Content[]>([])
-  const [assignments, setAssignments] = useState<Assignment[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [userName, setUserName] = useState("Cargando...")
-  const [userEmail, setUserEmail] = useState("cargando@mentora.edu")
-  const [userId, setUserId] = useState<string | null>(null)
-  const [openDialogs, setOpenDialogs] = useState<{ [key: number]: boolean }>({})
-  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null)
-  const [submissionFile, setSubmissionFile] = useState<File | null>(null)
+  const params = useParams();
+  const router = useRouter();
+  const courseId = params.id as string;
+  const { user, loading: loadingAuth, error: authError } = useAuth("student");
+  const [activeTab, setActiveTab] = useState("overview");
+  const [course, setCourse] = useState<Course | null>(null);
+  const [grades, setGrades] = useState<Grade[]>([]);
+  const [contents, setContents] = useState<Content[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [openDialogs, setOpenDialogs] = useState<{ [key: number]: boolean }>({});
+  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
+  const [submissionFile, setSubmissionFile] = useState<File | null>(null);
 
-  // Verificar autenticación y cargar datos
+  // Cargar datos
   useEffect(() => {
-    const token = localStorage.getItem("token")
-    if (!token) {
-      setError("No estás autenticado. Por favor, inicia sesión nuevamente.")
-      setTimeout(() => router.push("/login"), 2000)
-      return
-    }
-
-    const verifyUser = async () => {
-      try {
-        const response = await api.get("/user")
-        const { role, name, email, id } = response.data.data
-        if (role !== "student") {
-          setError("Acceso denegado. No tienes permisos de estudiante. Contacta al administrador.")
-          localStorage.removeItem("token")
-          setTimeout(() => router.push("/login"), 2000)
-          return
-        }
-        setUserName(name || "Usuario Desconocido")
-        setUserEmail(email || "sin@correo.com")
-        setUserId(id)
-      } catch (err) {
-        setError("Token inválido. Por favor, inicia sesión nuevamente.")
-        localStorage.removeItem("token")
-        setTimeout(() => router.push("/login"), 2000)
-      }
-    }
+    if (loadingAuth || authError) return;
 
     const fetchData = async () => {
       try {
-        setLoading(true)
+        setLoading(true);
         const [
           courseRes,
           gradesRes,
@@ -231,13 +211,14 @@ export default function CourseDetailPage() {
           api.get(`/courses/${courseId}/grades`).catch(err => ({ data: null, error: err })),
           api.get(`/courses/${courseId}/contents`).catch(err => ({ data: null, error: err })),
           api.get(`/courses/${courseId}/assignments`).catch(err => ({ data: null, error: err })),
-        ])
+        ]);
 
         if (!courseRes.data) {
-          throw new Error(courseRes.error?.response?.data?.message || "Error al cargar el curso.")
+          throw new Error(courseRes.error?.response?.data?.message || "Error al cargar el curso.");
         }
 
-        setCourse(courseRes.data.data)
+        console.log("Course schedule:", courseRes.data.data.schedule); // Debug log
+        setCourse(courseRes.data.data);
 
         const validGrades = gradesRes.data
           ? gradesRes.data.data
@@ -248,71 +229,70 @@ export default function CourseDetailPage() {
                   : grade.grade_value,
               }))
               .filter((grade: Grade) => grade.grade_value != null && typeof grade.grade_value === 'number')
-          : []
-        setGrades(validGrades || [])
+          : [];
+        setGrades(validGrades || []);
 
-        setContents(contentsRes.data ? contentsRes.data.data || [] : [])
-        setAssignments(assignmentsRes.data ? assignmentsRes.data.data || [] : [])
+        setContents(contentsRes.data ? contentsRes.data.data || [] : []);
+        setAssignments(assignmentsRes.data ? assignmentsRes.data.data || [] : []);
 
         if (gradesRes.error || contentsRes.error || assignmentsRes.error) {
-          setError("Algunos datos del curso no están disponibles. Verifica la configuración del curso.")
+          setError("Algunos datos del curso no están disponibles. Verifica la configuración del curso.");
         }
       } catch (err: unknown) {
-        const error = err as AxiosError<ApiErrorResponse>
+        const error = err as AxiosError<ApiErrorResponse>;
         const message = error.response?.status === 403
           ? "No tienes permiso para acceder a este curso. Asegúrate de estar matriculado o contacta al administrador."
           : error.response?.status === 404
             ? "El curso no existe o no está disponible. Verifica el ID del curso."
-            : error.response?.data?.message || error.message || "Error al cargar los datos del curso."
-        setError(message)
+            : error.response?.data?.message || error.message || "Error al cargar los datos del curso.";
+        setError(message);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    verifyUser()
-    fetchData()
-  }, [courseId, router])
+    fetchData();
+  }, [courseId, router, loadingAuth, authError]);
 
   // Funciones para manejar tareas
   const handleViewDetails = (assignment: Assignment) => {
-    setSelectedAssignment(assignment)
-    setSubmissionFile(null)
-    setOpenDialogs((prev) => ({ ...prev, [assignment.id]: true }))
-  }
+    setSelectedAssignment(assignment);
+    setSubmissionFile(null);
+    setOpenDialogs((prev) => ({ ...prev, [assignment.id]: true }));
+  };
 
   const handleSubmitAssignment = async () => {
-    if (!selectedAssignment || !submissionFile) return
+    if (!selectedAssignment || !submissionFile) return;
 
     try {
-      const formData = new FormData()
-      formData.append("file", submissionFile)
+      const formData = new FormData();
+      formData.append("file", submissionFile);
 
       await api.post(`/assignments/${selectedAssignment.id}/submit`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
-      })
+      });
 
-      setOpenDialogs((prev) => ({ ...prev, [selectedAssignment.id]: false }))
-      setSubmissionFile(null)
-      alert("Entrega enviada con éxito")
+      setOpenDialogs((prev) => ({ ...prev, [selectedAssignment.id]: false }));
+      setSubmissionFile(null);
+      alert("Entrega enviada con éxito");
 
-      const response = await api.get(`/courses/${courseId}/assignments`)
-      setAssignments(response.data.data || [])
+      const response = await api.get(`/courses/${courseId}/assignments`);
+      setAssignments(response.data.data || []);
     } catch (err: unknown) {
-      const error = err as AxiosError<ApiErrorResponse>
-      setError(error.response?.data?.message || "Error al enviar la entrega. Inténtalo de nuevo.")
+      const error = err as AxiosError<ApiErrorResponse>;
+      setError(error.response?.data?.message || "Error al enviar la entrega. Inténtalo de nuevo.");
     }
-  }
+  };
 
   const hasSubmitted = (assignment: Assignment) => {
     return Array.isArray(assignment.submissions_files) && assignment.submissions_files.some(
-      (submission) => submission.student_id === userId
-    )
-  }
+      (submission) => submission.student_id === user?.id
+    );
+  };
 
   const isPastDue = (dueDate: string) => {
-    return new Date(dueDate) < new Date()
-  }
+    return new Date(dueDate) < new Date();
+  };
 
   // Función para obtener el icono según el tipo de material
   const getFileIcon = (type: string, format: string) => {
@@ -322,27 +302,27 @@ export default function CourseDetailPage() {
           <FilePdf className="h-10 w-10 text-red-500" />
         ) : (
           <FileText className="h-10 w-10 text-blue-500" />
-        )
+        );
       case "presentation":
-        return <FileImage className="h-10 w-10 text-orange-500" />
+        return <FileImage className="h-10 w-10 text-orange-500" />;
       case "video":
-        return <Film className="h-10 w-10 text-purple-500" />
+        return <Film className="h-10 w-10 text-purple-500" />;
       case "code":
-        return <FileCode className="h-10 w-10 text-green-500" />
+        return <FileCode className="h-10 w-10 text-green-500" />;
       case "spreadsheet":
-        return <FileSpreadsheet className="h-10 w-10 text-green-500" />
+        return <FileSpreadsheet className="h-10 w-10 text-green-500" />;
       default:
-        return <FileText className="h-10 w-10 text-gray-500" />
+        return <FileText className="h-10 w-10 text-gray-500" />;
     }
-  }
+  };
 
   // Calcular la nota actual del curso
   const calculateCurrentGrade = (courseGrades: CourseGrade[]) => {
-    if (courseGrades.length === 0) return "N/A"
-    const totalPoints = courseGrades.reduce((sum, grade) => sum + (grade.grade || 0), 0)
-    const maxPoints = courseGrades.reduce((sum, grade) => sum + grade.maxGrade, 0)
-    return maxPoints === 0 ? "N/A" : ((totalPoints / maxPoints) * 10).toFixed(1)
-  }
+    if (courseGrades.length === 0) return "N/A";
+    const totalPoints = courseGrades.reduce((sum, grade) => sum + (grade.grade || 0), 0);
+    const maxPoints = courseGrades.reduce((sum, grade) => sum + grade.maxGrade, 0);
+    return maxPoints === 0 ? "N/A" : ((totalPoints / maxPoints) * 10).toFixed(1);
+  };
 
   // Simular datos faltantes y estructurar módulos, anuncios, tareas
   const courseData: CourseData | null = course
@@ -412,37 +392,96 @@ export default function CourseDetailPage() {
         })),
         gradient: ['from-blue-500 to-blue-700', 'from-green-500 to-green-700', 'from-purple-500 to-purple-700', 'from-red-500 to-red-700', 'from-indigo-500 to-indigo-700'][parseInt(course.id.replace(/-/g, '').slice(0, 8), 16) % 5],
       }
-    : null
+    : null;
 
   // Depuración temporal
   console.log('Pending Assignments:', courseData?.assignments.filter((a) => !hasSubmitted(a) && new Date(a.due_date) >= new Date()));
 
+  // Si está cargando autenticación
+  if (loadingAuth) {
+    return (
+      <MainLayout
+        userRole="student"
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@mentora.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
+      >
+        <div className="flex flex-col items-center justify-center h-[50vh]">
+          <h1 className="text-2xl font-bold">Verificando autenticación...</h1>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  // Si hay error de autenticación
+  if (authError) {
+    return (
+      <MainLayout
+        userRole="student"
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@mentora.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
+      >
+        <div className="flex flex-col items-center justify-center h-[50vh]">
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{authError}</AlertDescription>
+          </Alert>
+          <Button asChild className="mt-4">
+            <Link href="/login">Volver al Login</Link>
+          </Button>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  // Si está cargando datos
   if (loading) {
     return (
-      <MainLayout userRole="student" userName={userName} userEmail={userEmail}>
+      <MainLayout
+        userRole="student"
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@mentora.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
+      >
         <div className="flex flex-col items-center justify-center h-[50vh]">
           <h1 className="text-2xl font-bold">Cargando...</h1>
         </div>
       </MainLayout>
-    )
+    );
   }
 
+  // Si hay error o no hay datos del curso
   if (error || !courseData) {
     return (
-      <MainLayout userRole="student" userName={userName} userEmail={userEmail}>
+      <MainLayout
+        userRole="student"
+        userName={user?.name || "Cargando..."}
+        userEmail={user?.email || "cargando@mentora.edu"}
+        profilePhotoUrl={user?.profilePhotoUrl || null}
+      >
         <div className="flex flex-col items-center justify-center h-[50vh]">
-          <h1 className="text-2xl font-bold">Error al cargar el curso</h1>
-          <p className="text-muted-foreground mt-2 text-center">{error}</p>
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
           <Button asChild className="mt-4">
             <Link href="/student">Volver al Dashboard</Link>
           </Button>
         </div>
       </MainLayout>
-    )
+    );
   }
 
   return (
-    <MainLayout userRole="student" userName={userName} userEmail={userEmail}>
+    <MainLayout
+      userRole="student"
+      userName={user?.name || "Cargando..."}
+      userEmail={user?.email || "cargando@mentora.edu"}
+      profilePhotoUrl={user?.profilePhotoUrl || null}
+    >
       <div className="flex flex-col gap-8 container mx-auto px-4 py-6">
         {/* Encabezado del curso */}
         <Card className="mb-6 shadow-sm">
@@ -533,7 +572,14 @@ export default function CourseDetailPage() {
                 <h3 className="text-sm font-medium">Horario</h3>
                 <div className="flex items-center gap-2 mt-2 text-sm">
                   <Clock className="h-4 w-4 text-muted-foreground" />
-                  <span>{Array.isArray(courseData.schedule) ? courseData.schedule.join(', ') : courseData.schedule}</span>
+                  <span>
+                    {courseData.schedule && Array.isArray(courseData.schedule) && courseData.schedule.length > 0
+                      ? courseData.schedule
+                          .filter(slot => slot.day && slot.start_time && slot.end_time)
+                          .map(slot => `${slot.day} ${slot.start_time}-${slot.end_time}`)
+                          .join(', ') || "Sin horario"
+                      : "Sin horario"}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 mt-1 text-sm">
                   <Book className="h-4 w-4 text-muted-foreground" />
@@ -735,7 +781,7 @@ export default function CourseDetailPage() {
                                       <p className="text-sm text-green-600">
                                         Última entrega: {
                                           assignment.submissions_files?.find(
-                                            (s) => s.student_id === userId
+                                            (s) => s.student_id === user?.id
                                           )?.file_name || "Archivo enviado"
                                         }
                                       </p>
@@ -764,8 +810,8 @@ export default function CourseDetailPage() {
                                   <Button
                                     variant="outline"
                                     onClick={() => {
-                                      setOpenDialogs((prev) => ({ ...prev, [assignment.id]: false }))
-                                      setSubmissionFile(null)
+                                      setOpenDialogs((prev) => ({ ...prev, [assignment.id]: false }));
+                                      setSubmissionFile(null);
                                     }}
                                   >
                                     Cerrar
@@ -953,7 +999,7 @@ export default function CourseDetailPage() {
                                           <p className="text-sm text-green-600">
                                             Última entrega: {
                                               selectedAssignment.submissions_files?.find(
-                                                (s) => s.student_id === userId
+                                                (s) => s.student_id === user?.id
                                               )?.file_name || "Archivo enviado"
                                             }
                                           </p>
@@ -983,8 +1029,8 @@ export default function CourseDetailPage() {
                                     <Button
                                       variant="outline"
                                       onClick={() => {
-                                        setOpenDialogs((prev) => ({ ...prev, [selectedAssignment?.id || 0]: false }))
-                                        setSubmissionFile(null)
+                                        setOpenDialogs((prev) => ({ ...prev, [selectedAssignment?.id || 0]: false }));
+                                        setSubmissionFile(null);
                                       }}
                                     >
                                       Cerrar
@@ -1078,5 +1124,5 @@ export default function CourseDetailPage() {
         </div>
       </div>
     </MainLayout>
-  )
+  );
 }
