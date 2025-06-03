@@ -12,6 +12,15 @@ const nextConfig: NextConfig = {
   images: {
     domains: ["localhost"], // Permitir imágenes desde localhost
   },
+  async redirects() {
+    return [
+      {
+        source: '/',
+        destination: '/login',
+        permanent: false, // HTTP 307 (temporal) en lugar de 308 (permanente)
+      }
+    ]
+  }
 };
 
 export default nextConfig;
